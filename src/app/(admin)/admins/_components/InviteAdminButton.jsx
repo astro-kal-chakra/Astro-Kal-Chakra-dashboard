@@ -8,6 +8,7 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { useAdmin } from "@/providers/AdminProvider";
 import { useToast } from "@/providers/ToastProvider";
 import { inviteAdmin } from "@/actions/admins";
+import { InviteLinkDialog } from "./InviteLinkDialog";
 
 /** Invite a new admin. Hidden without admins:edit — the backend enforces the same check. */
 export function InviteAdminButton({ roleOptions }) {
@@ -15,6 +16,7 @@ export function InviteAdminButton({ roleOptions }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState(null);
 
   if (!can("admins", "edit")) return null;
 
@@ -27,13 +29,11 @@ export function InviteAdminButton({ roleOptions }) {
     if (!r.ok) return toast(r.error.message, { type: "error" });
     setOpen(false);
     const role = roleOptions.find((o) => o.value === data.role)?.label;
-    const { emailSent, inviteUrl } = r.data?.data ?? {};
-    if (emailSent) toast("Invite sent", { description: `${data.email} · ${role}` });
-    else {
-      // Email isn't configured on the backend: give the link to share by hand (dev/staging only).
-      if (inviteUrl) navigator.clipboard?.writeText(inviteUrl).catch(() => {});
-      toast("Invite created · email not configured", { type: "warning", duration: 10000, description: inviteUrl ? `Link copied: ${inviteUrl}` : "Share the invite link from the server log." });
-    }
+    const { emailSent, inviteUrl, expiresAt } = r.data?.data ?? {};
+    if (emailSent && !inviteUrl) toast("Invite sent", { description: `${data.email} · ${role}` });
+    // Email isn't set up (or failed): show the link to share by hand
+    else if (inviteUrl) setLink({ url: inviteUrl, email: data.email, name: data.name, role, expiresAt, emailSent });
+    else toast("Invite created", { type: "warning", description: "The email could not be sent. Use “Resend invite” to get a link." });
   };
 
   return (
@@ -41,6 +41,7 @@ export function InviteAdminButton({ roleOptions }) {
       <Button variant="primary" size="sm" icon={<UserPlus />} onClick={() => setOpen(true)}>
         Invite admin
       </Button>
+      <InviteLinkDialog invite={link} onClose={() => setLink(null)} />
       <Modal open={open} onClose={() => setOpen(false)} title="Invite admin" description="They get an email link to set a password.">
         <form onSubmit={submit} className="space-y-4">
           <Field label="Full name" htmlFor="inv-name">

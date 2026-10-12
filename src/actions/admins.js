@@ -5,7 +5,7 @@ import { num, run, str } from "@/lib/action";
 
 const ACTIONS = ["view", "edit", "approve", "delete"];
 
-/** → `{ admin, expiresAt, emailSent, inviteUrl? }` (`inviteUrl` only outside production, for when email isn't set up). */
+/** → `{ admin, expiresAt, emailSent, inviteUrl? }` (`inviteUrl` when the email was not sent, and always in development). */
 export async function inviteAdmin(d = {}) {
   return run(() => api("/admins/invite", { method: "POST", body: { name: str(d.name), email: str(d.email), role: seg(d.role) }, withMessage: true }));
 }
