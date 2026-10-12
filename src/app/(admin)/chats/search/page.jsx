@@ -54,6 +54,8 @@ export default async function ChatSearchPage({ searchParams }) {
         </p>
         {!q ? (
           <EmptyState icon={<Search />} title="Type a keyword to search" description="Results show matching messages with a link to the session." />
+        ) : data.tooShort ? (
+          <EmptyState icon={<Search />} title="Type at least 3 characters" description="Short keywords match too many messages." />
         ) : !data.rows.length ? (
           <EmptyState title={`No messages match “${q}”`} description="Try a shorter or different word." />
         ) : (

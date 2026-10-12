@@ -12,6 +12,7 @@ import { PersonCell } from "@/components/ui/Avatar";
 import { TabLinks } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ActionButton } from "@/components/common/ActionButton";
+import { approveRefund, rejectRefund } from "@/actions/payments";
 
 export const metadata = { title: "Refunds" };
 
@@ -31,7 +32,7 @@ export default async function RefundsPage({ searchParams }) {
   const data = await getRefunds({ ...params, status });
   // Roles without a limit (Super Admin, Finance) can approve any amount.
   // The backend applies the same limit when the approval is submitted.
-  const limit = admin.role.refundLimit ?? null;
+  const limit = data.limit !== undefined ? data.limit : (admin.role.refundLimit ?? null);
 
   const columns = [
     { key: "id", label: "Refund", render: (r) => <span className="font-mono text-xs">{r.id}</span> },
@@ -120,6 +121,7 @@ function RefundActions({ refund, limit }) {
         dialogDescription={`${formatCurrency(refund.amount)} to ${refund.userName}'s ${refund.destination === "wallet" ? "wallet" : "original payment method"}.`}
         confirmLabel="Approve refund"
         success="Refund approved"
+        run={approveRefund.bind(null, refund.id)}
       >
         Approve
       </ActionButton>
@@ -134,6 +136,7 @@ function RefundActions({ refund, limit }) {
         dialogDescription="The requester sees your reason."
         confirmLabel="Reject refund"
         success="Refund rejected"
+        run={rejectRefund.bind(null, refund.id)}
       >
         Reject
       </ActionButton>

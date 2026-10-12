@@ -15,6 +15,16 @@ export const BANNER_TONES = {
   sky: "from-sky-500 via-blue-500 to-indigo-500",
 };
 
+/** Screens in the astrologer app (AstroSide) a push can open. */
+export const ASTRO_DEEP_LINKS = [
+  { value: "app://notifications", label: "Notifications" },
+  { value: "app://earnings", label: "Earnings" },
+  { value: "app://live", label: "Go live" },
+  { value: "app://reviews", label: "Reviews" },
+  { value: "app://profile", label: "Profile" },
+  { value: "app://support", label: "Help & support" },
+];
+
 export const DEEP_LINKS = [
   { value: "app://recharge", label: "Recharge screen" },
   { value: "app://free-chat", label: "Free chat" },
@@ -22,5 +32,9 @@ export const DEEP_LINKS = [
   { value: "app://astrologers?skill=tarot", label: "Astrologers · Tarot" },
   { value: "app://horoscope", label: "Daily horoscope" },
   { value: "app://kundli", label: "Kundli" },
+  { value: "app://matching", label: "Kundli matching" },
+  { value: "app://panchang", label: "Daily Panchang" },
+  { value: "app://muhurat", label: "Shubh Muhurat finder" },
+  { value: "app://tools", label: "Astrology tools" },
   { value: "app://offers", label: "Offers" },
 ];

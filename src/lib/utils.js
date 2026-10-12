@@ -8,6 +8,17 @@ const inr = new Intl.NumberFormat("en-IN", {
   currency: "INR",
   maximumFractionDigits: 0,
 });
+// Sessions are billed by the second, so amounts can have paise (₹36.20)
+const inrPaise = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const fullInr = (v) => {
+  const n = Math.round((v ?? 0) * 100) / 100;
+  return Number.isInteger(n) ? inr.format(n) : inrPaise.format(n);
+};
 const inrCompact = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -25,8 +36,11 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-IN", {
 });
 const timeFmt = new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" });
 
-export const formatCurrency = (v, compact = false) => (compact ? inrCompact : inr).format(v ?? 0);
-export const formatNumber = (v, compact = false) => (compact ? numCompact : num).format(v ?? 0);
+// Node's ICU prints compact "₹12.0" where browsers print "₹12"; drop the ".0" so
+// server and client render the same text (no hydration mismatch).
+const trimZero = (s) => s.replace(/\.0(?=[^\d]*$)/, "");
+export const formatCurrency = (v, compact = false) => (compact ? trimZero(inrCompact.format(v ?? 0)) : fullInr(v));
+export const formatNumber = (v, compact = false) => (compact ? trimZero(numCompact.format(v ?? 0)) : num.format(v ?? 0));
 export const formatDate = (d) => (d ? dateFmt.format(new Date(d)) : "—");
 export const formatDateTime = (d) => (d ? dateTimeFmt.format(new Date(d)) : "—");
 export const formatTime = (d) => (d ? timeFmt.format(new Date(d)) : "—");
@@ -52,6 +66,7 @@ export function timeAgo(d) {
 
 /** +91 98•••••210 */
 export function maskPhone(phone = "") {
+  if (String(phone).includes("•")) return phone; // already masked by the API
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 6) return "•••••";
   return `+${digits.slice(0, 2)} ${digits.slice(2, 4)}•••••${digits.slice(-3)}`;

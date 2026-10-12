@@ -1,5 +1,5 @@
 import { checkAccess } from "@/lib/session";
-import { getMarketing } from "@/services";
+import { getReferralRules } from "@/services";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MiniStat } from "@/components/ui/StatCard";
@@ -11,7 +11,7 @@ export default async function ReferralsPage() {
   const { denied } = await checkAccess("marketing");
   if (denied) return denied;
 
-  const { referral } = await getMarketing();
+  const referral = await getReferralRules();
   const { stats, ...rules } = referral;
 
   return (

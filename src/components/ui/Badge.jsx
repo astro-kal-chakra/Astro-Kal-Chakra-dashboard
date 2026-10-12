@@ -61,6 +61,8 @@ const STATUS = {
   expired: ["neutral", "Expired"],
   sent: ["success", "Sent"],
   draft: ["neutral", "Draft"],
+  training: ["info", "In training"],
+  bypassed: ["neutral", "Bypassed"],
   published: ["success", "Published"],
   review: ["warning", "In review"],
   missing: ["danger", "Missing"],

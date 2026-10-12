@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ActionButton } from "@/components/common/ActionButton";
 import { UploadReportButton } from "../_components/UploadReportButton";
+import { resolveReconRow } from "@/actions/payments";
 
 export const metadata = { title: "Reconciliation" };
 
@@ -33,7 +34,11 @@ export default async function ReconciliationPage({ searchParams }) {
       <PageHeader
         back={{ href: "/payments", label: "Payments" }}
         title="Reconciliation"
-        description="Gateway settlement report compared with our database"
+        description={
+          data.run
+            ? `Report ${data.run.fileName ?? data.run.id} · ${data.run.status}${data.run.error ? ` · ${data.run.error}` : ""} · uploaded ${formatDateTime(data.run.createdAt)}${data.run.uploadedBy ? ` by ${data.run.uploadedBy}` : ""}`
+            : "Upload a gateway settlement report to compare it with our database"
+        }
         actions={<UploadReportButton />}
       />
 
@@ -66,7 +71,7 @@ export default async function ReconciliationPage({ searchParams }) {
               </thead>
               <tbody className="divide-y divide-border">
                 {data.rows.map((r) => (
-                  <tr key={r.orderId} className={cn("text-text-2", r.mismatch && "bg-danger-soft")}>
+                  <tr key={r.id ?? r.orderId} className={cn("text-text-2", r.mismatch && "bg-danger-soft")}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <Link href={`/payments/${r.orderId}`} className="font-mono text-xs text-primary hover:underline">
                         {r.orderId}
@@ -97,6 +102,7 @@ export default async function ReconciliationPage({ searchParams }) {
                           reasons={["Corrected in DB", "Gateway report error", "Refund issued", "Duplicate entry"]}
                           confirmLabel="Mark resolved"
                           success="Marked resolved"
+                          run={resolveReconRow.bind(null, r.id)}
                         >
                           Mark resolved
                         </ActionButton>
@@ -108,7 +114,7 @@ export default async function ReconciliationPage({ searchParams }) {
             </table>
           </div>
         ) : (
-          <EmptyState title="No mismatches" description="Every checked order matches the gateway report." />
+          <EmptyState title={data.run ? "No mismatches" : "No report yet"} description={data.run ? "Every checked order matches the gateway report." : "Upload the gateway settlement report (.csv or .xlsx) to start."} />
         )}
         <Pagination {...data} basePath="/payments/reconciliation" params={params} />
       </Card>

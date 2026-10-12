@@ -101,25 +101,7 @@ export default async function SessionsPage({ searchParams }) {
             <Button href="/sessions/live" size="sm" icon={<Radio />}>
               Live monitor
             </Button>
-            <ExportButton
-              module="sessions"
-              filename="sessions.csv"
-              rows={data.rows.map((s) => ({
-                id: s.id,
-                user: s.userName,
-                userId: s.userId,
-                astrologer: s.astrologerName,
-                astrologerId: s.astrologerId,
-                mode: s.mode,
-                status: s.status,
-                durationSec: s.duration,
-                amount: s.amount,
-                free: s.free ? "yes" : "no",
-                rating: s.rating ?? "",
-                endReason: s.endReason,
-                started: formatDateTime(s.startedAt),
-              }))}
-            />
+            <ExportButton module="sessions" filename="sessions.csv" endpoint="sessions" params={params} />
           </>
         }
       />

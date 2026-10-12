@@ -118,10 +118,12 @@ function ProfileMenu() {
               <UserCog className="size-4" /> Profile & security
             </Link>
           </div>
+          {admin.realRole?.key === "super_admin" && (
           <div className="border-t border-border py-1">
             <p className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-bold text-muted uppercase">
               <ShieldCheck className="size-3.5" /> Preview as role
             </p>
+            <p className="px-3 pb-1 text-[11px] text-muted">Changes what you see, not what you can do.</p>
             {ROLES.map((r) => (
               <button
                 key={r.key}
@@ -143,6 +145,7 @@ function ProfileMenu() {
               </button>
             ))}
           </div>
+          )}
           <div className="border-t border-border pt-1">
             <form action={logout}>
               <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-danger hover:bg-danger-soft">

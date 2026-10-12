@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ActionButton } from "@/components/common/ActionButton";
 import { BillingTable } from "./_components/BillingTable";
+import { forceEndSession } from "@/actions/sessions";
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -48,7 +49,7 @@ export default async function SessionDetailPage({ params }) {
               {s.mode}
             </Badge>
             {s.free && <Badge tone="info">Free session</Badge>}
-            {(s.flagged || s.flags.length > 0) && (
+            {(s.flagged || s.flags?.length > 0) && (
               <Badge tone="danger">
                 <Flag className="size-3" /> Flagged
               </Badge>
@@ -73,6 +74,7 @@ export default async function SessionDetailPage({ params }) {
                 dialogDescription="Billing stops now and both sides are told the session was ended by support."
                 confirmLabel="Force end"
                 success="Session ended"
+                run={forceEndSession.bind(null, s.id)}
               >
                 Force end
               </ActionButton>

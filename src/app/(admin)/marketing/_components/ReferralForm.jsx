@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { formatCurrency } from "@/lib/utils";
+import { saveReferralRules } from "@/actions/marketing";
 
 const TRIGGERS = [
   { value: "signup", label: "Friend signs up" },
@@ -28,9 +29,20 @@ export function ReferralForm({ rules }) {
 
   const save = async (e) => {
     e.preventDefault();
+    const d = Object.fromEntries(new FormData(e.currentTarget));
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350)); // simulated API call
+    // Disabled fieldsets don't submit their inputs: fall back to the saved values.
+    const r = await saveReferralRules({
+      enabled,
+      trigger,
+      referrerReward: d.referrerReward ?? rules.referrerReward,
+      refereeReward: d.refereeReward ?? rules.refereeReward,
+      minRecharge: d.minRecharge ?? rules.minRecharge,
+      maxRewardsPerUser: d.maxRewardsPerUser ?? rules.maxRewardsPerUser,
+      rewardExpiryDays: d.rewardExpiryDays ?? rules.rewardExpiryDays,
+    });
     setSaving(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     toast("Referral rules saved", { description: enabled ? "New rules apply to referrals from now on." : "Referral programme is turned off." });
   };
 

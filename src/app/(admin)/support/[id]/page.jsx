@@ -12,6 +12,7 @@ import { Field, Input } from "@/components/ui/Input";
 import { ActionButton } from "@/components/common/ActionButton";
 import { TicketThread } from "../_components/TicketThread";
 import { OpenChatButton, TicketControls } from "../_components/TicketControls";
+import { requestTicketRefund } from "@/actions/support";
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -53,6 +54,8 @@ export default async function TicketDetailPage({ params }) {
             dialogDescription={`Raised from ticket ${ticket.id}. Finance or Ops approves it on the Refunds page.`}
             confirmLabel="Submit refund request"
             success="Refund requested"
+            run={requestTicketRefund.bind(null, ticket.id)}
+            apiMessage
             reasons={["Payment captured, wallet not credited", "Session disconnected", "Astrologer misconduct", "Duplicate charge"]}
             fields={
               <Field label="Amount (₹)" htmlFor="refund-amount" hint={`Max ${formatCurrency(refundMax)}`}>
@@ -67,14 +70,14 @@ export default async function TicketDetailPage({ params }) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-5">
         <div className="min-w-0">
-          <TicketThread ticketId={ticket.id} userName={ticket.userName} initialMessages={ticket.messages} cannedReplies={ticket.cannedReplies} />
+          <TicketThread key={ticket.messages?.length ?? 0} ticketId={ticket.id} userName={ticket.userName} initialMessages={ticket.messages ?? []} cannedReplies={ticket.cannedReplies ?? []} />
         </div>
 
         <aside className="min-w-0 space-y-4 lg:space-y-5">
           <Card>
             <CardHeader title="Ticket" />
             <CardBody>
-              <TicketControls ticket={{ id: ticket.id, status: ticket.status, priority: ticket.priority, assignee: ticket.assignee }} agents={ticket.agents} />
+              <TicketControls ticket={{ id: ticket.id, status: ticket.status, priority: ticket.priority, assigneeId: ticket.assigneeId }} agents={ticket.agentOptions ?? []} />
             </CardBody>
           </Card>
 

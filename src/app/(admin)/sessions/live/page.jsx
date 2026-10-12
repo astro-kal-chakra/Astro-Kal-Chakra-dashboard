@@ -7,12 +7,14 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import { SESSION_MODES } from "@/config/constants";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
+import { Pagination } from "@/components/ui/Table";
 import { MiniStat } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ActionButton } from "@/components/common/ActionButton";
 import { AutoRefresh } from "./_components/AutoRefresh";
+import { forceEndSession } from "@/actions/sessions";
 import { LiveAmount, LiveDuration } from "./_components/LiveTicker";
 
 export const metadata = { title: "Live monitor" };
@@ -35,6 +37,7 @@ function ForceEnd({ s }) {
       dialogDescription={`${s.id} · ${s.userName} with ${s.astrologerName}. Billing stops now and both sides are told the session was ended by support.`}
       confirmLabel="Force end"
       success="Session ended"
+      run={forceEndSession.bind(null, s.id)}
     >
       Force end
     </ActionButton>
@@ -55,8 +58,9 @@ export default async function LiveMonitorPage({ searchParams }) {
   if (denied) return denied;
 
   const params = flatParams(await searchParams);
-  const [all, rows] = await Promise.all([getLiveSessions(), getLiveSessions({ mode: params.mode })]);
-  const byMode = (m) => all.filter((s) => s.mode === m).length;
+  // One call per refresh: the rows for the chosen mode plus totals across every live session
+  const data = await getLiveSessions({ mode: params.mode, page: params.page });
+  const { rows, summary } = data;
 
   return (
     <>
@@ -82,11 +86,11 @@ export default async function LiveMonitorPage({ searchParams }) {
       </p>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:mb-5 lg:grid-cols-5">
-        <MiniStat label="Live now" value={formatNumber(all.length)} accent />
-        <MiniStat label="Chat" value={formatNumber(byMode("chat"))} />
-        <MiniStat label="Voice" value={formatNumber(byMode("voice"))} />
-        <MiniStat label="Video" value={formatNumber(byMode("video"))} />
-        <MiniStat label="Amount so far" value={formatCurrency(all.reduce((s, x) => s + x.amount, 0))} hint="At last refresh" />
+        <MiniStat label="Live now" value={formatNumber(summary.total)} accent />
+        <MiniStat label="Chat" value={formatNumber(summary.chat)} />
+        <MiniStat label="Voice" value={formatNumber(summary.voice)} />
+        <MiniStat label="Video" value={formatNumber(summary.video)} />
+        <MiniStat label="Amount so far" value={formatCurrency(summary.amount)} hint="At last refresh" />
       </div>
 
       <Card>
@@ -138,6 +142,7 @@ export default async function LiveMonitorPage({ searchParams }) {
         ) : (
           <EmptyState icon={<Radio />} title="No live sessions" description="Nothing is running for this mode right now." />
         )}
+        <Pagination {...data} basePath="/sessions/live" params={params} />
       </Card>
     </>
   );

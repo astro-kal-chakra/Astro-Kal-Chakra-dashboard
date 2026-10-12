@@ -9,8 +9,8 @@ export function RevenueView({ a }) {
       <KpiRow
         items={[
           { label: "Gross revenue", value: formatCurrency(t.revenue, true), change: c.revenue, href: "/payments?status=success" },
-          { label: "Commission earned", value: formatCurrency(t.commission, true), change: c.commission },
-          { label: "Astrologer payout share", value: formatCurrency(t.payoutShare, true), change: c.payoutShare, href: "/payouts" },
+          { label: "Platform charges", value: formatCurrency(t.commission, true), change: c.commission },
+          { label: "Astrologer earnings", value: formatCurrency(t.payoutShare, true), change: c.payoutShare, href: "/payouts" },
           { label: "Recharge amount", value: formatCurrency(t.rechargeAmount, true), change: c.rechargeAmount, href: "/payments" },
         ]}
       />
@@ -26,26 +26,25 @@ export function RevenueView({ a }) {
         <ChartCard title="Gross revenue" description={`Per ${range.group}`} className="lg:col-span-2">
           <TrendChart data={a.series} series={[{ key: "revenue", label: "Revenue" }]} format="currency" compare={range.compare} href="/payments?status=success" />
         </ChartCard>
-        <ChartCard title="Where revenue goes" description={range.label}>
+        <ChartCard title="Earnings vs platform charges" description={range.label}>
           <DonutChart
             format="currency"
             centerLabel="Gross"
             data={[
-              { name: "Astrologer payouts", value: t.payoutShare },
-              { name: "Commission earned", value: t.commission },
+              { name: "Astrologer earnings", value: t.payoutShare },
+              { name: "Platform charges", value: t.commission },
             ]}
           />
         </ChartCard>
       </Grid>
       <Grid>
-        <ChartCard title="Payout share vs commission" description="Stacked to gross revenue">
+        <ChartCard title="Astrologer earnings vs platform charges" description="Charges are collected when payouts are paid">
           <BarChart
             data={a.series}
-            stacked
             format="currency"
             series={[
-              { key: "payoutShare", label: "Payout share" },
-              { key: "commission", label: "Commission", color: 1 },
+              { key: "payoutShare", label: "Astrologer earnings" },
+              { key: "commission", label: "Platform charges", color: 1 },
             ]}
           />
         </ChartCard>

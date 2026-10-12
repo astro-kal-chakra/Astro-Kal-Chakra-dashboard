@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Info, Lock, Plus, Save } from "lucide-react";
+import { Info, Lock, Plus, Save, Trash2 } from "lucide-react";
 import { ACTIONS, MODULES } from "@/config/permissions";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,28 +10,30 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { useAdmin } from "@/providers/AdminProvider";
 import { useToast } from "@/providers/ToastProvider";
 import { cn } from "@/lib/utils";
+import { createRole, deleteRole, updateRole } from "@/actions/admins";
 
 const NEW = "__new";
 const empty = () => Object.fromEntries(MODULES.map((m) => [m.key, []]));
 const normalise = (perms = {}) => Object.fromEntries(MODULES.map((m) => [m.key, [...(perms[m.key] ?? [])]]));
 
 /**
- * Role permission editor. System roles are read-only; custom roles can be
- * edited. The backend validates and enforces the saved matrix — this only edits it.
+ * Role permission editor. System roles are read-only; custom roles are
+ * created, edited and deleted through the API, which validates and enforces
+ * the saved matrix (only a Super Admin can grant settings or admin management).
  */
 export function PermissionMatrix({ roles }) {
   const { can } = useAdmin();
   const toast = useToast();
   const canEdit = can("admins", "edit");
 
-  const [custom, setCustom] = useState([]);
   const [selected, setSelected] = useState(roles[0].key);
   const [perms, setPerms] = useState(() => normalise(roles[0].permissions));
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [refundLimit, setRefundLimit] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const all = [...roles, ...custom];
+  const all = roles;
   const role = selected === NEW ? null : all.find((r) => r.key === selected);
   const isNew = selected === NEW;
   const readOnly = !canEdit || role?.system;
@@ -42,12 +44,14 @@ export function PermissionMatrix({ roles }) {
       setPerms(empty());
       setName("");
       setDescription("");
+      setRefundLimit("");
       return;
     }
     const r = all.find((x) => x.key === key);
     setPerms(normalise(r?.permissions));
     setName(r?.name ?? "");
     setDescription(r?.description ?? "");
+    setRefundLimit(r?.refundLimit ?? "");
   };
 
   // Any action implies "view"; removing "view" removes everything.
@@ -67,19 +71,28 @@ export function PermissionMatrix({ roles }) {
       toast("Give the role a name", { type: "error" });
       return;
     }
-    setBusy(true);
-    await new Promise((r) => setTimeout(r, 400)); // simulated PUT /roles/:key
-    setBusy(false);
     const clean = Object.fromEntries(Object.entries(perms).filter(([, a]) => a.length));
+    const payload = { name: name.trim() || role?.name, description: description.trim(), permissions: clean, refundLimit };
+    setBusy(true);
+    const r = isNew ? await createRole(payload) : await updateRole(selected, payload);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     if (isNew) {
-      const key = `custom_${Date.now()}`;
-      setCustom((c) => [...c, { key, name: name.trim(), description: description.trim(), system: false, permissions: clean }]);
-      setSelected(key);
-      toast("Custom role created", { description: `${name.trim()} · ${granted} permissions · logged to audit` });
+      if (r.data?.key) setSelected(r.data.key);
+      toast("Custom role created", { description: `${payload.name} · ${granted} permissions · logged to audit` });
     } else {
-      setCustom((c) => c.map((r) => (r.key === selected ? { ...r, name: name.trim() || r.name, description, permissions: clean } : r)));
-      toast("Role updated", { description: `${name.trim() || role.name} · logged to audit` });
+      toast("Role updated", { description: `${payload.name} · logged to audit` });
     }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Delete the role “${role.name}”? Admins must be moved to another role first.`)) return;
+    setBusy(true);
+    const r = await deleteRole(selected);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    toast("Role deleted", { description: `${role.name} · logged to audit` });
+    load(roles[0].key);
   };
 
   const options = [
@@ -125,6 +138,11 @@ export function PermissionMatrix({ roles }) {
             <Field label="Description" htmlFor="matrix-desc">
               <Input id="matrix-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this role is for" disabled={!canEdit} />
             </Field>
+            {perms.refunds?.includes("approve") && (
+              <Field label="Refund approval limit (₹)" htmlFor="matrix-limit" help="Blank = no limit">
+                <Input id="matrix-limit" type="number" min="0" value={refundLimit ?? ""} onChange={(e) => setRefundLimit(e.target.value)} placeholder="1000" disabled={!canEdit} />
+              </Field>
+            )}
           </div>
         )}
 
@@ -191,6 +209,11 @@ export function PermissionMatrix({ roles }) {
             {isNew && (
               <Button size="sm" variant="ghost" onClick={() => load(roles[0].key)}>
                 Cancel
+              </Button>
+            )}
+            {!isNew && role && !role.system && (
+              <Button size="sm" variant="danger-soft" icon={<Trash2 />} disabled={busy} onClick={remove}>
+                Delete role
               </Button>
             )}
             <Button size="sm" variant="primary" icon={<Save />} loading={busy} onClick={save}>

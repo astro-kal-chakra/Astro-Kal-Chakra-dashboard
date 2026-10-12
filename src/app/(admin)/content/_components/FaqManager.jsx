@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { ChevronDown, Pencil, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -10,29 +11,40 @@ import { Modal } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
+import { saveFaq, setFaqPublished } from "@/actions/content";
 
 export function FaqManager({ initial }) {
-  const [faqs, setFaqs] = useState(initial);
+  const [faqs, setFaqs] = useServerState(initial);
   const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
   const toast = useToast();
   const { can } = useAdmin();
   // UI mirror of content:edit / content:approve — the backend enforces the same.
   const canEdit = can("content", "edit");
   const canPublish = can("content", "approve");
 
-  const categories = [...new Set(faqs.map((f) => f.category))];
+  const categories = [...new Set([...faqs.map((f) => f.category), "General"])];
 
-  const togglePublish = (f, published) => {
+  const togglePublish = async (f, published) => {
     setFaqs((list) => list.map((x) => (x.id === f.id ? { ...x, published } : x)));
+    const r = await setFaqPublished(f.id, published);
+    if (!r.ok) {
+      setFaqs((list) => list.map((x) => (x.id === f.id ? { ...x, published: !published } : x)));
+      return toast(r.error.message, { type: "error" });
+    }
     toast(published ? "FAQ published" : "FAQ unpublished", { description: f.question });
   };
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.currentTarget));
     const patch = { question: d.question, answer: d.answer, category: d.category.trim() };
-    if (editing.id) setFaqs((list) => list.map((x) => (x.id === editing.id ? { ...x, ...patch } : x)));
-    else setFaqs((list) => [...list, { id: `FQ${Date.now()}`, published: false, ...patch }]);
+    setBusy(true);
+    const r = await saveFaq(editing.id ?? null, patch);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    if (editing.id) setFaqs((list) => list.map((x) => (x.id === editing.id ? { ...x, ...patch, ...r.data } : x)));
+    else setFaqs((list) => [...list, { published: false, ...patch, ...r.data }]);
     toast(editing.id ? "FAQ updated" : "FAQ added", { description: editing.id ? patch.question : "Saved as unpublished." });
     setEditing(null);
   };
@@ -101,7 +113,7 @@ export function FaqManager({ initial }) {
             </Field>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button onClick={() => setEditing(null)}>Cancel</Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={busy}>
                 Save FAQ
               </Button>
             </div>

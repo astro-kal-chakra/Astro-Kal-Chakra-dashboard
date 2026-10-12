@@ -1,7 +1,8 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useEffect, useState } from "react";
-import { CircleCheck, CircleX, FileText, Lock, ShieldAlert } from "lucide-react";
+import { CircleCheck, CircleX, ExternalLink, FileText, Loader2, Lock, ShieldAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -9,6 +10,7 @@ import { ReasonDialog } from "@/components/common/ReasonDialog";
 import { useAdmin } from "@/providers/AdminProvider";
 import { useToast } from "@/providers/ToastProvider";
 import { cn, formatDateTime } from "@/lib/utils";
+import { getKycLink, rejectKycDoc, verifyKycDoc } from "@/actions/astrologers";
 
 const LINK_TTL = 5 * 60; // seconds
 const REJECT_REASONS = ["Document is blurry", "Document expired", "Name does not match", "Wrong document type", "Looks edited or tampered"];
@@ -18,11 +20,14 @@ const REJECT_REASONS = ["Document is blurry", "Document expired", "Name does not
  * backend for a short-lived signed link (5 min); verify/reject are checked
  * server-side against the `astrologers.approve` permission as well.
  */
-export function KycDocuments({ docs: initial, astrologerName }) {
-  const [docs, setDocs] = useState(initial);
+export function KycDocuments({ docs: initial, astrologerId, astrologerName }) {
+  const [docs, setDocs] = useServerState(initial);
   const [openId, setOpenId] = useState(null);
   const [rejecting, setRejecting] = useState(false);
   const [left, setLeft] = useState(LINK_TTL);
+  const [link, setLink] = useState(null); // { url } | { error }
+  const [preview, setPreview] = useState(true); // false when the file isn't an image
+  const [verifying, setVerifying] = useState(false);
   const { can } = useAdmin();
   const toast = useToast();
   const canReview = can("astrologers", "approve");
@@ -35,9 +40,25 @@ export function KycDocuments({ docs: initial, astrologerName }) {
     return () => clearInterval(t);
   }, [openId]);
 
-  const open = (id) => {
-    setLeft(LINK_TTL);
+  // Each open asks the backend for a fresh signed link (the view is audit-logged).
+  const open = async (id) => {
     setOpenId(id);
+    setLink(null);
+    setPreview(true);
+    setLeft(LINK_TTL);
+    const r = await getKycLink(astrologerId, id);
+    if (!r.ok) return setLink({ error: r.error.message });
+    setLink({ url: r.data.url });
+    setLeft(r.data.expiresIn ?? LINK_TTL);
+  };
+
+  const verify = async () => {
+    setVerifying(true);
+    const r = await verifyKycDoc(astrologerId, doc.id);
+    setVerifying(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    setStatus(doc.id, "verified");
+    toast(`${doc.name} verified`, { type: "success", description: "Recorded in audit log" });
   };
 
   const setStatus = (id, status) => setDocs((list) => list.map((d) => (d.id === id ? { ...d, status } : d)));
@@ -95,10 +116,8 @@ export function KycDocuments({ docs: initial, astrologerName }) {
                     variant="success"
                     icon={<CircleCheck />}
                     disabled={doc.status === "verified"}
-                    onClick={() => {
-                      setStatus(doc.id, "verified");
-                      toast(`${doc.name} verified`, { type: "success", description: "Recorded in audit log" });
-                    }}
+                    loading={verifying}
+                    onClick={verify}
                   >
                     Verify
                   </Button>
@@ -128,9 +147,24 @@ export function KycDocuments({ docs: initial, astrologerName }) {
                 expired && "opacity-40"
               )}
             >
-              <FileText className="size-10" />
-              <p className="text-sm font-semibold text-text-2">{doc.name}</p>
-              <p className="text-xs">Document preview</p>
+              {!link ? (
+                <Loader2 className="size-8 animate-spin" />
+              ) : link.error ? (
+                <p className="px-4 text-center text-sm text-danger">{link.error}</p>
+              ) : expired ? (
+                <p className="text-sm">Link expired</p>
+              ) : preview ? (
+                // eslint-disable-next-line @next/next/no-img-element -- private signed URL, must not go through the image optimiser
+                <img src={link.url} alt={doc.name} referrerPolicy="no-referrer" onError={() => setPreview(false)} className="absolute inset-0 size-full bg-surface object-contain" />
+              ) : (
+                <>
+                  <FileText className="size-10" />
+                  <p className="text-sm font-semibold text-text-2">{doc.name}</p>
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                    Open document <ExternalLink className="size-3.5" />
+                  </a>
+                </>
+              )}
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl font-extrabold tracking-widest text-text/5 uppercase select-none -rotate-12">
                 Confidential · Admin view
               </span>
@@ -151,7 +185,12 @@ export function KycDocuments({ docs: initial, astrologerName }) {
         confirmLabel="Reject document"
         variant="danger"
         reasons={REJECT_REASONS}
-        onConfirm={(reason) => {
+        onConfirm={async (reason) => {
+          const r = await rejectKycDoc(astrologerId, doc.id, reason);
+          if (!r.ok) {
+            toast(r.error.message, { type: "error" });
+            return false;
+          }
           setStatus(doc.id, "rejected");
           toast(`${doc.name} rejected`, { type: "warning", description: `Reason: ${reason}` });
         }}

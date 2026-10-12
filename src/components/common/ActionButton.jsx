@@ -15,7 +15,11 @@ import { ReasonDialog } from "./ReasonDialog";
  * - `confirm`: a plain "are you sure" dialog
  * - neither: runs immediately
  *
- * UI-only: shows a toast with `success`. Wire the API call in `onDone`.
+ * `run(reason, fields)` is the API call — usually a Server Action bound in the
+ * page (`run={blockUser.bind(null, user.id)}`) returning `{ ok, data, error }`.
+ * On failure the dialog stays open and the backend's message is shown; on
+ * success the `success` toast shows and `onDone(reason, fields, data)` runs.
+ * `apiMessage`: use the backend's message (actions called with `withMessage`) as the toast text.
  */
 export function ActionButton({
   module,
@@ -27,6 +31,8 @@ export function ActionButton({
   confirmLabel,
   success = "Done",
   successDescription,
+  apiMessage,
+  run,
   onDone,
   fields,
   reasons,
@@ -45,9 +51,26 @@ export function ActionButton({
 
   if (module && !can(module, action)) return null;
 
-  const finish = (why, data) => {
-    toast(success, { description: why ? `Reason: ${why}` : successDescription });
-    onDone?.(why, data);
+  /** Returns false when the call failed, so dialogs stay open. */
+  const finish = async (why, data) => {
+    let result = null;
+    if (run) {
+      try {
+        result = await run(why, data);
+      } catch {
+        result = { ok: false, error: { message: "Couldn't reach the server. Try again." } };
+      }
+      if (!result?.ok) {
+        toast(result?.error?.message ?? "Something went wrong. Try again.", { type: "error" });
+        return false;
+      }
+    }
+    // `apiMessage` shows the backend's message (e.g. "Refund auto-approved"); from client
+    // components `successDescription` can also be a function of the result.
+    const fromResult = apiMessage ? result?.data?.message : typeof successDescription === "function" ? successDescription(result?.data) : null;
+    toast(success, { description: fromResult || (why ? `Reason: ${why}` : typeof successDescription === "function" ? undefined : successDescription) });
+    onDone?.(why, data, result?.data);
+    return true;
   };
 
   const dialogTone = dialogVariant ?? (variant.startsWith("danger") ? "danger" : "primary");
@@ -60,8 +83,14 @@ export function ActionButton({
         size={size}
         icon={icon}
         className={className}
-        disabled={disabled}
-        onClick={() => (reason || confirm ? setOpen(true) : finish())}
+        disabled={disabled || busy}
+        loading={!reason && !confirm && busy}
+        onClick={async () => {
+          if (reason || confirm) return setOpen(true);
+          setBusy(true);
+          await finish();
+          setBusy(false);
+        }}
       >
         {children}
       </Button>
@@ -95,10 +124,9 @@ export function ActionButton({
                 loading={busy}
                 onClick={async () => {
                   setBusy(true);
-                  await new Promise((r) => setTimeout(r, 300));
+                  const ok = await finish();
                   setBusy(false);
-                  setOpen(false);
-                  finish();
+                  if (ok) setOpen(false);
                 }}
               >
                 {confirmLabel ?? "Confirm"}

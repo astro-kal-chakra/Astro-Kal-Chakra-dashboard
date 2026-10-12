@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { ActionButton } from "@/components/common/ActionButton";
 import { CopyButton } from "../_components/CopyButton";
+import { requestRefund, retryWebhook } from "@/actions/payments";
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -27,8 +28,11 @@ export default async function PaymentDetailPage({ params }) {
   const p = await getPayment(id);
   if (!p) notFound();
 
-  const canRefund = p.status === "success" && !p.refund;
-  const failedHooks = p.webhooks.filter((w) => w.status >= 500).length;
+  // `refundable` = amount not yet refunded or waiting in the queue (₹).
+  const refundable = p.refundable ?? (p.refund ? 0 : p.amount);
+  const canRefund = refundable > 0;
+  const webhooks = p.webhooks ?? [];
+  const failedHooks = webhooks.filter((w) => w.status >= 500).length;
 
   return (
     <>
@@ -53,12 +57,14 @@ export default async function PaymentDetailPage({ params }) {
               icon={<RotateCcw />}
               dialogTitle="Request refund"
               dialogDescription={`Paid ${formatCurrency(p.amount)} by ${p.method}. The request goes to the refunds queue for approval.`}
+              run={requestRefund.bind(null, p.id)}
+              apiMessage
               confirmLabel="Send for approval"
               success="Refund requested"
               fields={
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Amount (₹)" htmlFor="rf-amount" hint={`Max ${formatCurrency(p.amount)}`}>
-                    <Input id="rf-amount" name="amount" type="number" min="1" max={p.amount} defaultValue={p.amount} required />
+                  <Field label="Amount (₹)" htmlFor="rf-amount" hint={`Max ${formatCurrency(refundable)}`}>
+                    <Input id="rf-amount" name="amount" type="number" min="1" max={refundable} defaultValue={refundable} required />
                   </Field>
                   <Field label="Refund to" htmlFor="rf-dest">
                     <Select
@@ -107,11 +113,11 @@ export default async function PaymentDetailPage({ params }) {
           <Card>
             <CardHeader title="Webhook events" description="Events from the gateway and the HTTP status we returned" />
             <ol className="px-4 py-4 sm:px-5">
-              {p.webhooks.map((w, i) => {
+              {webhooks.map((w, i) => {
                 const failed = w.status >= 500;
                 return (
                   <li key={`${w.event}-${i}`} className="relative flex gap-3 pb-5 last:pb-0">
-                    {i < p.webhooks.length - 1 && <span className="absolute top-4 left-[4.5px] h-full w-px bg-border" aria-hidden />}
+                    {i < webhooks.length - 1 && <span className="absolute top-4 left-[4.5px] h-full w-px bg-border" aria-hidden />}
                     <span className={cn("relative mt-1.5 size-2.5 shrink-0 rounded-full", failed ? "bg-danger" : "bg-success")} />
                     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -133,6 +139,7 @@ export default async function PaymentDetailPage({ params }) {
                             dialogDescription={`Process ${w.event} for ${p.id} again. Safe to retry: the handler ignores duplicates.`}
                             confirmLabel="Retry now"
                             success="Webhook queued for retry"
+                            run={retryWebhook.bind(null, p.id, i)}
                           >
                             Retry webhook
                           </ActionButton>
@@ -149,7 +156,7 @@ export default async function PaymentDetailPage({ params }) {
             <CardHeader title="Wallet ledger entries" description="Wallet entries that reference this order" />
             <DataTable
               dense
-              rows={p.ledger}
+              rows={p.ledger ?? []}
               empty={{ title: "No ledger entries", description: "No wallet entry references this order." }}
               columns={[
                 { key: "id", label: "Entry", render: (l) => <span className="font-mono text-xs">{l.id}</span> },

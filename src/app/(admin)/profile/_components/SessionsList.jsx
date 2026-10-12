@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { LogOut, Monitor, Smartphone } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -9,11 +10,12 @@ import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/providers/ToastProvider";
 import { timeAgo } from "@/lib/utils";
+import { revokeOtherSessions, revokeSession } from "@/actions/profile";
 
 /** The admin's own sign-in sessions. The backend revokes the session tokens. */
 export function SessionsList({ sessions: initial }) {
   const toast = useToast();
-  const [sessions, setSessions] = useState(initial);
+  const [sessions, setSessions] = useServerState(initial);
   const [confirmAll, setConfirmAll] = useState(false);
   const [busy, setBusy] = useState(null);
 
@@ -21,16 +23,18 @@ export function SessionsList({ sessions: initial }) {
 
   const signOut = async (s) => {
     setBusy(s.id);
-    await new Promise((r) => setTimeout(r, 350)); // simulated DELETE /me/sessions/:id
+    const r = await revokeSession(s.id);
     setBusy(null);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setSessions((list) => list.filter((x) => x.id !== s.id));
     toast("Session signed out", { description: `${s.device} · ${s.browser}` });
   };
 
   const signOutAll = async () => {
     setBusy("all");
-    await new Promise((r) => setTimeout(r, 400)); // simulated DELETE /me/sessions?others=1
+    const r = await revokeOtherSessions();
     setBusy(null);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setConfirmAll(false);
     setSessions((list) => list.filter((x) => x.current));
     toast("Signed out of all other sessions", { description: `${others.length} session${others.length === 1 ? "" : "s"} ended · logged to audit` });

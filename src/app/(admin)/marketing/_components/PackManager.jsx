@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { Pencil, Plus, Star } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -11,18 +12,25 @@ import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import { savePack, setPackActive } from "@/actions/marketing";
 
 export function PackManager({ initial }) {
-  const [packs, setPacks] = useState(initial);
+  const [packs, setPacks] = useServerState(initial);
   const [editing, setEditing] = useState(null);
   const [highlight, setHighlight] = useState(false);
+  const [busy, setBusy] = useState(false);
   const toast = useToast();
   const { can } = useAdmin();
   // UI mirror of marketing:edit — the backend enforces the same check.
   const canEdit = can("marketing", "edit");
 
-  const toggleActive = (p, active) => {
+  const toggleActive = async (p, active) => {
     setPacks((list) => list.map((x) => (x.id === p.id ? { ...x, active } : x)));
+    const r = await setPackActive(p.id, active);
+    if (!r.ok) {
+      setPacks((list) => list.map((x) => (x.id === p.id ? { ...x, active: !active } : x)));
+      return toast(r.error.message, { type: "error" });
+    }
     toast(active ? "Pack activated" : "Pack hidden", { description: `${formatCurrency(p.amount)} pack ${active ? "is visible in the app" : "is no longer shown"}.` });
   };
 
@@ -31,14 +39,18 @@ export function PackManager({ initial }) {
     setHighlight(Boolean(p.highlight));
   };
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.currentTarget));
     const patch = { label: d.label, amount: Number(d.amount), bonus: Number(d.bonus), highlight };
+    setBusy(true);
+    const r = await savePack(editing.id ?? null, patch);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setPacks((list) => {
       // Only one pack can carry the "Popular" highlight.
       const cleared = highlight ? list.map((x) => ({ ...x, highlight: false })) : list;
-      return editing.id ? cleared.map((x) => (x.id === editing.id ? { ...x, ...patch } : x)) : [...cleared, { id: `P${Date.now()}`, active: true, sold: 0, ...patch }];
+      return editing.id ? cleared.map((x) => (x.id === editing.id ? { ...x, ...patch } : x)) : [...cleared, { active: true, sold: 0, ...patch, ...r.data }];
     });
     toast(editing.id ? "Pack updated" : "Pack created", { description: `Pay ${formatCurrency(patch.amount)} · Get ${formatCurrency(patch.amount + patch.bonus)}` });
     setEditing(null);
@@ -116,7 +128,7 @@ export function PackManager({ initial }) {
             </label>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button onClick={() => setEditing(null)}>Cancel</Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={busy}>
                 Save pack
               </Button>
             </div>

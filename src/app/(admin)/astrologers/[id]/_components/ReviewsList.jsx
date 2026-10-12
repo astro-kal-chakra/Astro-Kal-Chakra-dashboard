@@ -1,15 +1,17 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { Eye, EyeOff, Star } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ActionButton } from "@/components/common/ActionButton";
 import { cn, timeAgo } from "@/lib/utils";
+import { setReviewHidden } from "@/actions/astrologers";
 
 /** Review moderation. Hide/unhide is permission-checked here and on the backend. */
 export function ReviewsList({ reviews: initial }) {
-  const [reviews, setReviews] = useState(initial);
+  const [reviews, setReviews] = useServerState(initial);
   if (!reviews.length) return <EmptyState title="No reviews yet" description="Reviews appear after users rate a session." />;
 
   const toggle = (id) => setReviews((list) => list.map((r) => (r.id === id ? { ...r, hidden: !r.hidden } : r)));
@@ -32,11 +34,11 @@ export function ReviewsList({ reviews: initial }) {
             <p className={cn("mt-1 text-sm", r.hidden ? "text-muted line-through" : "text-text-2")}>{r.text}</p>
           </div>
           {r.hidden ? (
-            <ActionButton module="astrologers" size="xs" variant="ghost" icon={<Eye />} confirm dialogTitle="Unhide review" dialogDescription="The review shows on the astrologer's profile again." confirmLabel="Unhide" success="Review visible again" onDone={() => toggle(r.id)}>
+            <ActionButton module="astrologers" size="xs" variant="ghost" icon={<Eye />} confirm dialogTitle="Unhide review" dialogDescription="The review shows on the astrologer's profile again." confirmLabel="Unhide" success="Review visible again" run={() => setReviewHidden(r.id, false)} onDone={() => toggle(r.id)}>
               Unhide
             </ActionButton>
           ) : (
-            <ActionButton module="astrologers" size="xs" variant="ghost" icon={<EyeOff />} confirm dialogTitle="Hide review" dialogDescription="The review is hidden from the app. The rating still counts." confirmLabel="Hide review" success="Review hidden" onDone={() => toggle(r.id)}>
+            <ActionButton module="astrologers" size="xs" variant="ghost" icon={<EyeOff />} confirm dialogTitle="Hide review" dialogDescription="The review is hidden from the app. The rating still counts." confirmLabel="Hide review" success="Review hidden" run={() => setReviewHidden(r.id, true)} onDone={() => toggle(r.id)}>
               Hide
             </ActionButton>
           )}

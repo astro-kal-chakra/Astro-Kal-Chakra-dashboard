@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
-import { checkAccess } from "@/lib/session";
-import { getTranscript } from "@/services";
+import { getCurrentAdmin } from "@/lib/session";
+import { can } from "@/config/permissions";
+import { getChatMessages, getTranscript } from "@/services";
+import { flatParams } from "@/lib/url";
 import { formatCurrency, formatDateTime, formatDuration } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
+import AccessDenied from "@/components/common/AccessDenied";
 import { TranscriptGate } from "../_components/TranscriptGate";
 
 export async function generateMetadata({ params }) {
@@ -11,15 +14,23 @@ export async function generateMetadata({ params }) {
   return { title: `Chat ${id}` };
 }
 
-export default async function ChatTranscriptPage({ params }) {
-  const { denied } = await checkAccess("chats");
-  if (denied) return denied;
+export default async function ChatTranscriptPage({ params, searchParams }) {
+  const admin = await getCurrentAdmin();
+  const { ticket } = flatParams(await searchParams);
+  // Support agents have no Chats module: they come here only from a linked ticket.
+  // The backend checks that the ticket really is linked to this session.
+  const viaTicket = Boolean(ticket) && !can(admin.role, "chats", "view") && can(admin.role, "support", "edit");
+  if (!can(admin.role, "chats", "view") && !viaTicket) return <AccessDenied module="chats" roleName={admin.role.name} />;
 
   const { id } = await params;
   const data = await getTranscript(id);
   if (!data || data.session.mode !== "chat") notFound();
 
-  const { session, messages } = data;
+  // The transcript itself is only sent after a logged reason (POST /chats/:id/open).
+  // While that grant is still valid (15 min) the messages can be loaded directly.
+  const opened = data.access ? await getChatMessages(id) : null;
+
+  const { session } = data;
   const summary = {
     id: session.id,
     userName: session.userName,
@@ -29,14 +40,14 @@ export default async function ChatTranscriptPage({ params }) {
     started: formatDateTime(session.startedAt),
     duration: formatDuration(session.duration),
     amount: session.free ? "Free" : formatCurrency(session.amount),
-    messageCount: messages.length,
-    flaggedCount: messages.filter((m) => m.flagged).length,
+    messageCount: data.messageCount,
+    flaggedCount: data.flaggedCount,
   };
 
   return (
     <>
       <PageHeader
-        back={{ href: "/chats", label: "All chats" }}
+        back={viaTicket ? { href: `/support/${ticket}`, label: `Ticket ${ticket}` } : { href: "/chats", label: "All chats" }}
         title={<span className="font-mono">{session.id}</span>}
         description={`${session.userName} with ${session.astrologerName}`}
         meta={
@@ -47,13 +58,7 @@ export default async function ChatTranscriptPage({ params }) {
           </>
         }
       />
-      {/*
-        UI-only demo: messages are passed as props so the gate can reveal them.
-        In production the transcript is NOT sent with this page. The client
-        POSTs the reason to the backend (which checks chats:view and writes the
-        audit log) and only then fetches the messages.
-      */}
-      <TranscriptGate summary={summary} messages={messages} />
+      <TranscriptGate summary={summary} ticketId={viaTicket ? ticket : null} initial={opened} />
     </>
   );
 }

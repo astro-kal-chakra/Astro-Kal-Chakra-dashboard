@@ -1,19 +1,30 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { ROLE_MAP, can } from "@/config/permissions";
+import { PREVIEW_COOKIE } from "@/lib/authCookies";
+import { api } from "@/lib/api";
 import AccessDenied from "@/components/common/AccessDenied";
 
-/** Server-only helpers for the signed-in admin (demo: stored in cookies). */
-export async function getCurrentAdmin() {
-  const store = await cookies();
-  const roleKey = store.get("admin_role")?.value ?? "super_admin";
-  const role = ROLE_MAP[roleKey] ?? ROLE_MAP.super_admin;
+/**
+ * The signed-in admin from `GET /admin/me` (role + permission matrix), fetched
+ * once per request. A Super Admin can preview the UI as another system role:
+ * that only changes what the dashboard shows — the backend keeps using the real role.
+ */
+export const getCurrentAdmin = cache(async () => {
+  const me = await api("/me");
+  const realRole = me.role;
+  const previewKey = (await cookies()).get(PREVIEW_COOKIE)?.value;
+  const preview = realRole.key === "super_admin" && previewKey && previewKey !== realRole.key ? ROLE_MAP[previewKey] : null;
   return {
-    id: "ADM101",
-    name: store.get("admin_name")?.value ?? "Vandana Rao",
-    email: store.get("admin_email")?.value ?? "vandana@astroadmin.in",
-    role,
+    id: me.id,
+    name: me.name,
+    email: me.email,
+    role: preview ?? realRole,
+    realRole,
+    previewing: Boolean(preview),
+    idleTimeoutSeconds: me.idleTimeoutSeconds ?? 1800,
   };
-}
+});
 
 /**
  * Server-side permission gate for pages. Usage:

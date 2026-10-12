@@ -104,7 +104,15 @@ export const NAV_SECTIONS = [
   {
     title: "System",
     items: [
-      { label: "Settings", href: "/settings", icon: Settings, module: "settings" },
+      {
+        label: "Settings",
+        icon: Settings,
+        module: "settings",
+        children: [
+          { label: "Platform settings", href: "/settings" },
+          { label: "Astrologer registration", href: "/settings/astrologer-form" },
+        ],
+      },
       { label: "Admins & roles", href: "/admins", icon: ShieldCheck, module: "admins" },
       { label: "Audit logs", href: "/audit-logs", icon: ScrollText, module: "audit" },
     ],

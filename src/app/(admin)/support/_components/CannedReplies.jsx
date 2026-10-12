@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { MessageSquareText, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -12,6 +13,7 @@ import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { formatNumber } from "@/lib/utils";
 import { TICKET_CATEGORIES } from "./constants";
+import { createCannedReply, deleteCannedReply, updateCannedReply } from "@/actions/support";
 
 const VARIABLES = ["name", "amount"];
 
@@ -33,30 +35,35 @@ function BodyWithChips({ body }) {
 }
 
 export function CannedReplies({ initial }) {
-  const [replies, setReplies] = useState(initial);
+  const [replies, setReplies] = useServerState(initial);
   const [editing, setEditing] = useState(null); // reply object, or {} for new
   const [deleting, setDeleting] = useState(null);
+  const [busy, setBusy] = useState(false);
   const toast = useToast();
   const { can } = useAdmin();
   // UI mirror of support:edit / support:delete — the backend enforces the same.
   const canEdit = can("support", "edit");
   const canDelete = can("support", "delete");
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget));
-    if (editing.id) {
-      setReplies((list) => list.map((r) => (r.id === editing.id ? { ...r, ...data } : r)));
-      toast("Canned reply updated", { description: data.title });
-    } else {
-      setReplies((list) => [{ id: `CR${Date.now()}`, uses: 0, ...data }, ...list]);
-      toast("Canned reply created", { description: data.title });
-    }
+    setBusy(true);
+    const r = editing.id ? await updateCannedReply(editing.id, data) : await createCannedReply(data);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    const saved = r.data ?? { id: editing.id, uses: editing.uses ?? 0, ...data };
+    setReplies((list) => (editing.id ? list.map((x) => (x.id === editing.id ? { ...x, ...saved } : x)) : [saved, ...list]));
+    toast(editing.id ? "Canned reply updated" : "Canned reply created", { description: data.title });
     setEditing(null);
   };
 
-  const remove = () => {
-    setReplies((list) => list.filter((r) => r.id !== deleting.id));
+  const remove = async () => {
+    setBusy(true);
+    const r = await deleteCannedReply(deleting.id);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    setReplies((list) => list.filter((x) => x.id !== deleting.id));
     toast("Canned reply deleted", { description: deleting.title });
     setDeleting(null);
   };
@@ -126,7 +133,7 @@ export function CannedReplies({ initial }) {
             </Field>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button onClick={() => setEditing(null)}>Cancel</Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={busy}>
                 {editing.id ? "Save changes" : "Create reply"}
               </Button>
             </div>
@@ -142,7 +149,7 @@ export function CannedReplies({ initial }) {
         footer={
           <>
             <Button onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="danger" onClick={remove}>
+            <Button variant="danger" loading={busy} onClick={remove}>
               Delete
             </Button>
           </>

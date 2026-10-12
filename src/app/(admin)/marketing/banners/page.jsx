@@ -1,5 +1,5 @@
 import { checkAccess } from "@/lib/session";
-import { getMarketing } from "@/services";
+import { getBanners } from "@/services";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { BannerManager } from "../_components/BannerManager";
 
@@ -9,7 +9,7 @@ export default async function BannersPage() {
   const { denied } = await checkAccess("marketing");
   if (denied) return denied;
 
-  const { banners } = await getMarketing();
+  const banners = await getBanners();
 
   return (
     <>

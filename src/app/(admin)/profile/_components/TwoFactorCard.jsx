@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Field, Input } from "@/components/ui/Input";
 import { useToast } from "@/providers/ToastProvider";
+import { useRouter } from "next/navigation";
 import { cn, downloadCSV, formatDate } from "@/lib/utils";
+import { finish2faSetup, start2faSetup } from "@/actions/profile";
 
-// Demo values. In production the server generates the secret and codes, and
-// only shows recovery codes once.
-const MANUAL_KEY = "JBSW Y3DP EHPK 3PXP KQ7M 2RZL";
-const RECOVERY_CODES = ["8F3K-29QD", "MX7P-4LTA", "2HWN-Q8VC", "R5YE-K1ZB", "T9GU-6NJS", "C4DA-P7XM", "W2LF-H3QR", "N6BV-E8TK"];
+// The server generates the secret (POST /me/2fa/setup) and the recovery codes
+// (POST /me/2fa/verify); the codes are shown once and never again.
 const STEPS = ["Scan", "Verify", "Save codes"];
 
 export function TwoFactorCard({ email, twoFactor }) {
@@ -24,31 +24,50 @@ export function TwoFactorCard({ email, twoFactor }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [enabledAt, setEnabledAt] = useState(twoFactor.enabledAt);
+  const [setup, setSetup] = useState(null); // { manualKey, qrDataUrl }
+  const [codes, setCodes] = useState([]);
+  const [codesLeft, setCodesLeft] = useState(twoFactor.recoveryCodesLeft);
+  const [starting, setStarting] = useState(false);
+  const router = useRouter();
+
+  const begin = async () => {
+    setStarting(true);
+    const r = await start2faSetup();
+    setStarting(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    setSetup(r.data);
+    setOpen(true);
+  };
 
   const close = () => {
     setOpen(false);
     setStep(0);
     setCode("");
     setError("");
+    setSetup(null);
+    setCodes([]);
   };
 
   const verify = async (e) => {
     e.preventDefault();
     if (code.length !== 6) return;
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 450)); // simulated POST /me/2fa/verify
+    const r = await finish2faSetup(code);
     setBusy(false);
-    if (code === "000000") {
-      setError("That code didn't match. Check your phone's time and try again.");
+    if (!r.ok) {
+      setError(r.error.message);
       return;
     }
     setError("");
+    setCodes(r.data?.recoveryCodes ?? []);
+    setCodesLeft(r.data?.recoveryCodes?.length ?? codesLeft);
     setStep(2);
   };
 
   const finish = () => {
     setEnabledAt(Date.now());
     close();
+    router.refresh();
     toast("Two-factor authentication reconfigured", { description: "Old authenticator and recovery codes no longer work · logged to audit" });
   };
 
@@ -80,11 +99,11 @@ export function TwoFactorCard({ email, twoFactor }) {
           <div className="min-w-0">
             <p className="text-sm font-semibold text-text">{twoFactor.method}</p>
             <p className="text-xs text-muted">
-              Set up {formatDate(enabledAt)} · {twoFactor.recoveryCodesLeft} recovery codes left
+              Set up {formatDate(enabledAt)} · {codesLeft} recovery codes left
             </p>
           </div>
         </div>
-        <Button size="sm" icon={<RefreshCw />} onClick={() => setOpen(true)}>
+        <Button size="sm" icon={<RefreshCw />} loading={starting} onClick={begin}>
           Reconfigure
         </Button>
       </CardBody>
@@ -117,12 +136,17 @@ export function TwoFactorCard({ email, twoFactor }) {
           <div className="space-y-4">
             <p className="text-sm text-text-2">Scan this code with Google Authenticator, Authy or 1Password.</p>
             <div className="flex justify-center">
-              <QrPlaceholder />
+              {setup?.qrDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- data: URL from the API
+                <img src={setup.qrDataUrl} alt="QR code for your authenticator app" className="size-44 rounded-xl border border-border bg-white p-2" />
+              ) : (
+                <p className="text-sm text-muted">QR code unavailable — use the key below.</p>
+              )}
             </div>
             <Field label="Can't scan? Enter this key manually" htmlFor="tfa-key" help={`Account: ${email}`}>
               <div className="flex gap-2">
-                <Input id="tfa-key" readOnly value={MANUAL_KEY} className="min-w-0 flex-1 font-mono tracking-wider" />
-                <Button size="icon" aria-label="Copy key" icon={<Copy />} onClick={() => copy(MANUAL_KEY.replace(/\s/g, ""), "Key")} />
+                <Input id="tfa-key" readOnly value={setup?.manualKey ?? ""} className="min-w-0 flex-1 font-mono tracking-wider" />
+                <Button size="icon" aria-label="Copy key" icon={<Copy />} onClick={() => copy(String(setup?.manualKey ?? "").replace(/\s/g, ""), "Key")} />
               </div>
             </Field>
             <div className="flex justify-end gap-2 pt-1">
@@ -168,17 +192,17 @@ export function TwoFactorCard({ email, twoFactor }) {
               Save these recovery codes somewhere safe. Each works once if you lose your phone. They won&apos;t be shown again.
             </p>
             <ul className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-surface-2 p-3">
-              {RECOVERY_CODES.map((c) => (
+              {codes.map((c) => (
                 <li key={c} className="text-center font-mono text-sm text-text tabular-nums">
                   {c}
                 </li>
               ))}
             </ul>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" icon={<Copy />} onClick={() => copy(RECOVERY_CODES.join("\n"), "Recovery codes")}>
+              <Button size="sm" icon={<Copy />} onClick={() => copy(codes.join("\n"), "Recovery codes")}>
                 Copy
               </Button>
-              <Button size="sm" icon={<Download />} onClick={() => downloadCSV("recovery-codes.csv", RECOVERY_CODES.map((c) => ({ code: c })))}>
+              <Button size="sm" icon={<Download />} onClick={() => downloadCSV("recovery-codes.csv", codes.map((c) => ({ code: c })))}>
                 Download
               </Button>
             </div>
@@ -191,36 +215,5 @@ export function TwoFactorCard({ email, twoFactor }) {
         )}
       </Modal>
     </Card>
-  );
-}
-
-/** Deterministic QR-like grid. A placeholder — the real QR comes from the server. */
-function QrPlaceholder({ size = 25 }) {
-  const cells = [];
-  const finder = (x, y) => {
-    const inBox = (ox, oy) => x >= ox && x < ox + 7 && y >= oy && y < oy + 7;
-    for (const [ox, oy] of [[0, 0], [size - 7, 0], [0, size - 7]]) {
-      if (inBox(ox, oy)) {
-        const dx = x - ox;
-        const dy = y - oy;
-        const ring = dx === 0 || dx === 6 || dy === 0 || dy === 6;
-        const core = dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4;
-        return ring || core ? 1 : 0;
-      }
-      if (x >= ox - 1 && x <= ox + 7 && y >= oy - 1 && y <= oy + 7) return 0;
-    }
-    return null;
-  };
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const f = finder(x, y);
-      const on = f ?? ((x * 7 + y * 13 + ((x * y) % 11)) * 2654435761) % 7 < 3;
-      if (on) cells.push(<rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" />);
-    }
-  }
-  return (
-    <svg viewBox={`-2 -2 ${size + 4} ${size + 4}`} className="size-44 rounded-xl border border-border bg-white" role="img" aria-label="QR code for your authenticator app">
-      <g fill="#111">{cells}</g>
-    </svg>
   );
 }

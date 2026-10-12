@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { FileText, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +10,8 @@ import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { formatDate } from "@/lib/utils";
-import { NOW } from "@/lib/clock";
+import { now } from "@/lib/clock";
+import { getPolicy, publishPolicy } from "@/actions/content";
 
 /** "3.2" → "3.3"; major bumps → "4.0". */
 const bump = (v, major) => {
@@ -18,24 +20,37 @@ const bump = (v, major) => {
 };
 
 export function PolicyManager({ initial }) {
-  const [policies, setPolicies] = useState(initial);
+  const [policies, setPolicies] = useServerState(initial);
   const [editing, setEditing] = useState(null);
   const [major, setMajor] = useState(false);
+  const [busy, setBusy] = useState(false);
   const toast = useToast();
   const { can } = useAdmin();
   // UI mirror of content:edit / content:approve — the backend enforces the same.
   const canEdit = can("content", "edit");
   const canPublish = can("content", "approve");
 
-  const open = (p) => {
+  // The list has no policy text: load the current version before editing.
+  const open = async (p) => {
     setMajor(false);
-    setEditing(p);
+    setEditing({ ...p, loading: true });
+    const r = await getPolicy(p.slug);
+    if (!r.ok) {
+      setEditing(null);
+      return toast(r.error.message, { type: "error" });
+    }
+    setEditing({ ...p, ...r.data, loading: false });
   };
 
-  const publish = (e) => {
+  const publish = async (e) => {
     e.preventDefault();
-    const version = bump(editing.version, major);
-    setPolicies((list) => list.map((p) => (p.id === editing.id ? { ...p, version, updatedAt: NOW } : p)));
+    const body = new FormData(e.currentTarget).get("body");
+    setBusy(true);
+    const r = await publishPolicy(editing.slug, body, major);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    const version = r.data?.version ?? bump(editing.version, major);
+    setPolicies((list) => list.map((p) => (p.id === editing.id ? { ...p, version, updatedAt: now() } : p)));
     toast(`${editing.title} v${version} published`, { description: major ? "Users will be asked to accept the new version." : "Live on the app and website." });
     setEditing(null);
   };
@@ -66,7 +81,8 @@ export function PolicyManager({ initial }) {
       </Card>
 
       <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={editing ? `Edit ${editing.title}` : ""} description={editing ? `Current version v${editing.version}` : ""} size="xl">
-        {editing && (
+        {editing?.loading && <p className="py-10 text-center text-sm text-muted">Loading policy…</p>}
+        {editing && !editing.loading && (
           <form onSubmit={publish} className="space-y-4">
             <Field label="Policy text" htmlFor="pl-body" help="Markdown supported. Previous versions stay archived for legal records.">
               <Textarea
@@ -75,7 +91,7 @@ export function PolicyManager({ initial }) {
                 required
                 rows={14}
                 className="font-mono text-[13px]"
-                defaultValue={`# ${editing.title}\n\nVersion ${editing.version} · Last updated ${formatDate(editing.updatedAt)}\n\n## 1. Overview\n\n`}
+                defaultValue={editing.body ?? `# ${editing.title}\n\n`}
               />
             </Field>
             <label className="flex items-start gap-2 text-sm text-text-2">
@@ -87,7 +103,7 @@ export function PolicyManager({ initial }) {
             <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
               <Button onClick={() => setEditing(null)}>Cancel</Button>
               {canPublish && (
-                <Button type="submit" variant="primary">
+                <Button type="submit" variant="primary" loading={busy}>
                   Publish v{bump(editing.version, major)}
                 </Button>
               )}

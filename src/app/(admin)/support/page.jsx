@@ -27,7 +27,7 @@ export default async function SupportInboxPage({ searchParams }) {
   const filters = [
     { name: "priority", label: "Any priority", options: PRIORITIES },
     { name: "category", label: "All categories", options: TICKET_CATEGORIES },
-    { name: "assignee", label: "Any assignee", options: [{ value: "unassigned", label: "Unassigned" }, ...data.agents.map((a) => ({ value: a, label: a }))] },
+    { name: "assignee", label: "Any assignee", options: [{ value: "unassigned", label: "Unassigned" }, ...(data.agentOptions ?? []).map((a) => ({ value: a.id, label: a.name }))] },
   ];
 
   const columns = [

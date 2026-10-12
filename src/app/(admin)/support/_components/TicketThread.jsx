@@ -9,15 +9,16 @@ import { Select, Textarea } from "@/components/ui/Input";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { cn, formatDateTime } from "@/lib/utils";
-import { NOW } from "@/lib/clock";
+import { replyToTicket } from "@/actions/support";
 
-/** Conversation thread + reply composer. Sending is simulated: the message is appended locally. */
+/** Conversation thread + reply composer. Replies and internal notes are saved through the API. */
 export function TicketThread({ ticketId, userName, initialMessages, cannedReplies }) {
   const [messages, setMessages] = useState(initialMessages);
   const [mode, setMode] = useState("reply");
   const [text, setText] = useState("");
   const [canned, setCanned] = useState("");
   const [sending, setSending] = useState(false);
+  const [usedCanned, setUsedCanned] = useState(null); // counts the canned reply's "uses"
   const toast = useToast();
   const { admin, can } = useAdmin();
   // UI mirror of the backend rule: only admins with support:edit can reply.
@@ -29,19 +30,22 @@ export function TicketThread({ ticketId, userName, initialMessages, cannedReplie
     const reply = cannedReplies.find((c) => c.id === id);
     if (!reply) return;
     const body = reply.body.replaceAll("{{name}}", firstName);
+    setUsedCanned(id);
     setText((t) => (t.trim() ? `${t.trimEnd()}\n\n${body}` : body));
   };
 
   const send = async () => {
     if (!text.trim()) return;
     setSending(true);
-    await new Promise((r) => setTimeout(r, 300)); // simulated API call
+    const r = await replyToTicket(ticketId, { text, mode, cannedReplyId: usedCanned ?? undefined });
+    setSending(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setMessages((m) => [
       ...m,
-      { id: `local-${m.length + 1}`, from: mode === "note" ? "note" : "agent", author: admin?.name ?? "You", text: text.trim(), at: NOW },
+      r.data ?? { id: `local-${m.length + 1}`, from: mode === "note" ? "note" : "agent", author: admin?.name ?? "You", text: text.trim(), at: Date.now() },
     ]);
     setText("");
-    setSending(false);
+    setUsedCanned(null);
     toast(mode === "note" ? "Internal note added" : "Reply sent", {
       description: mode === "note" ? "Only visible to the support team." : `Sent to ${userName} on ticket ${ticketId}.`,
     });

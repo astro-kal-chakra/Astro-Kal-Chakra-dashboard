@@ -11,13 +11,18 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { cn } from "@/lib/utils";
+import { saveSettings } from "@/actions/settings";
+import { FreeChatAstrologers } from "./FreeChatAstrologers";
 
 /** Human labels for every setting, used in the "before → after" confirm list. */
 const LABELS = {
-  defaultCommission: "Default commission (%)",
+  defaultCommission: "Default platform charge (%)",
   freeChatEnabled: "Free first chat",
   freeChatMinutes: "Free chat minutes",
+  freeChatModes: "Default free modes",
   minWalletBalance: "Minimum wallet balance (₹)",
+  minRecharge: "Minimum recharge (₹)",
+  maxRecharge: "Maximum recharge (₹)",
   minBalanceMinutes: "Minimum balance (minutes)",
   refundAutoApproveLimit: "Refund auto-approve limit (₹)",
   queueMaxLength: "Max queue length",
@@ -39,12 +44,16 @@ const FEATURES = {
   giftsInChat: ["Gifts in chat", "Users can send paid gifts during a chat."],
 };
 
-const show = (v) => (typeof v === "boolean" ? (v ? "On" : "Off") : v === "" || v == null ? "—" : String(v));
+const MODE_LABELS = { chat: "Chat", call: "Voice call", video: "Video call" };
+
+const show = (v) =>
+  Array.isArray(v) ? v.map((m) => MODE_LABELS[m] || m).join(", ") || "—" : typeof v === "boolean" ? (v ? "On" : "Off") : v === "" || v == null ? "—" : String(v);
+const same = (a, b) => (Array.isArray(a) || Array.isArray(b) ? JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort()) : a === b);
 
 function diff(before, after) {
   const out = [];
   for (const key of Object.keys(LABELS)) {
-    if (before[key] !== after[key]) out.push({ key, label: LABELS[key], from: show(before[key]), to: show(after[key]) });
+    if (!same(before[key], after[key])) out.push({ key, label: LABELS[key], from: show(before[key]), to: show(after[key]) });
   }
   for (const key of Object.keys(FEATURES)) {
     if (before.features?.[key] !== after.features?.[key]) {
@@ -54,7 +63,7 @@ function diff(before, after) {
   return out;
 }
 
-export function SettingsForm({ initial }) {
+export function SettingsForm({ initial, freeChatAstrologers }) {
   const toast = useToast();
   const { can } = useAdmin();
   // UI mirror of the backend check: only admins with settings:edit can change values.
@@ -74,10 +83,19 @@ export function SettingsForm({ initial }) {
   const setFeature = (key, value) => setValues((v) => ({ ...v, features: { ...v.features, [key]: value } }));
 
   const save = async () => {
+    // Only the changed keys go to PUT /settings; the backend logs the before → after diff.
+    const patch = {};
+    for (const c of changes) {
+      if (c.key.startsWith("features.")) patch.features = { ...patch.features, [c.key.slice(9)]: values.features[c.key.slice(9)] };
+      else patch[c.key] = values[c.key];
+    }
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 400)); // simulated PUT /settings
+    const r = await saveSettings(patch);
     setBusy(false);
-    setSaved(values);
+    if (!r.ok) return toast(r.error.message, { type: "error", duration: 6000 });
+    const next = r.data && typeof r.data === "object" && "features" in r.data ? r.data : values;
+    setSaved(next);
+    setValues(next);
     setConfirmOpen(false);
     toast("Settings saved · logged to audit", { description: `${changes.length} change${changes.length === 1 ? "" : "s"} applied` });
   };
@@ -106,10 +124,10 @@ export function SettingsForm({ initial }) {
 
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
         <Card>
-          <CardHeader title="Commission & billing" description="Applies to new sessions only." />
+          <CardHeader title="Platform charge & billing" description="Users pay the astrologer's price per minute, billed by the second." />
           <CardBody className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={LABELS.defaultCommission} htmlFor="defaultCommission" help="Platform share of each paid minute.">
+              <Field label={LABELS.defaultCommission} htmlFor="defaultCommission" help="Deducted from astrologer payouts (not from sessions). Applies to new payout requests.">
                 {num("defaultCommission", { min: 0, max: 100 })}
               </Field>
               <Field label={LABELS.refundAutoApproveLimit} htmlFor="refundAutoApproveLimit" help="Refunds up to this amount skip review.">
@@ -120,14 +138,58 @@ export function SettingsForm({ initial }) {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-text">Free first chat</p>
-                  <p className="text-xs text-muted">New users get a free chat on their first session.</p>
+                  <p className="text-xs text-muted">
+                    New users (no session taken yet) get one free session with an astrologer in free mode, in the modes that astrologer gives free. No payment, and the astrologer is not paid for it.
+                  </p>
                 </div>
                 <Switch checked={values.freeChatEnabled} onChange={(v) => set("freeChatEnabled", v)} label="Free first chat" disabled={!editable} />
               </div>
               {values.freeChatEnabled && (
-                <Field label={LABELS.freeChatMinutes} htmlFor="freeChatMinutes" className="mt-3">
-                  {num("freeChatMinutes", { min: 1, max: 30 })}
-                </Field>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <Field label={LABELS.freeChatMinutes} htmlFor="freeChatMinutes" help="The free session ends by itself after this many minutes.">
+                    {num("freeChatMinutes", { min: 1, max: 30 })}
+                  </Field>
+                  <fieldset>
+                    <legend className="mb-1.5 text-sm font-medium text-text">{LABELS.freeChatModes}</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(MODE_LABELS).map(([mode, label]) => {
+                        const modes = values.freeChatModes || ["chat"];
+                        const on = modes.includes(mode);
+                        return (
+                          <label
+                            key={mode}
+                            className={cn(
+                              "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm",
+                              on ? "border-primary bg-primary-soft text-text" : "border-border text-muted",
+                              !editable && "cursor-not-allowed opacity-60"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              className="accent-current"
+                              checked={on}
+                              disabled={!editable || (on && modes.length === 1)}
+                              onChange={(e) => set("freeChatModes", e.target.checked ? [...modes, mode] : modes.filter((m) => m !== mode))}
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted">
+                      Used for astrologers who turn on &ldquo;Free chat&rdquo; in the app and haven&apos;t been given their own modes below.
+                    </p>
+                  </fieldset>
+                </div>
+              )}
+              {/* Same free minutes / modes: astrologers switched on here take exactly what is saved above */}
+              {saved.freeChatEnabled && (
+                <FreeChatAstrologers
+                  data={freeChatAstrologers}
+                  modes={saved.freeChatModes}
+                  minutes={saved.freeChatMinutes}
+                  unsaved={changes.some((c) => c.key === "freeChatEnabled" || c.key === "freeChatMinutes")}
+                />
               )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -136,6 +198,12 @@ export function SettingsForm({ initial }) {
               </Field>
               <Field label={LABELS.minBalanceMinutes} htmlFor="minBalanceMinutes" help="Balance must cover this many minutes.">
                 {num("minBalanceMinutes", { min: 1 })}
+              </Field>
+              <Field label={LABELS.minRecharge} htmlFor="minRecharge" help="Smallest amount a user can add to the wallet in one payment (app and website).">
+                {num("minRecharge", { min: 1 })}
+              </Field>
+              <Field label={LABELS.maxRecharge} htmlFor="maxRecharge" help="Largest amount for one recharge.">
+                {num("maxRecharge", { min: 1 })}
               </Field>
             </div>
           </CardBody>

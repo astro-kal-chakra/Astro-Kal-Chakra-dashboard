@@ -1,4 +1,4 @@
-import { NOW } from "./clock";
+import { now } from "./clock";
 
 const DAY = 86400000;
 
@@ -17,9 +17,9 @@ const shortFmt = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "shor
  * Pure — safe in server and client code.
  */
 export function resolveRange({ preset = "30d", from, to } = {}) {
-  const today = startOfDay(NOW);
+  const today = startOfDay(now());
   let start;
-  let end = endOfDay(NOW);
+  let end = endOfDay(now());
 
   switch (preset) {
     case "today":
@@ -33,12 +33,12 @@ export function resolveRange({ preset = "30d", from, to } = {}) {
       start = today - 6 * DAY;
       break;
     case "this_month": {
-      const d = new Date(NOW);
+      const d = new Date(now());
       start = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
       break;
     }
     case "last_month": {
-      const d = new Date(NOW);
+      const d = new Date(now());
       start = new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime();
       end = new Date(d.getFullYear(), d.getMonth(), 1).getTime() - 1;
       break;

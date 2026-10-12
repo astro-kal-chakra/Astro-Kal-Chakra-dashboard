@@ -39,31 +39,15 @@ export default async function PayoutsPage({ searchParams }) {
         title="Payouts"
         description={`${formatNumber(data.counts.requested ?? 0)} payout requests waiting for approval`}
         actions={
-          <ExportButton
-            module="payouts"
-            filename={`payouts-${status}.csv`}
-            rows={data.rows.map((p) => ({
-              id: p.id,
-              astrologer: p.astrologerName,
-              period: p.period,
-              gross: p.gross,
-              commissionRate: p.commissionRate,
-              commission: p.commission,
-              tds: p.tds,
-              net: p.net,
-              status: p.status,
-              utr: p.utr ?? "",
-              bank: p.bank,
-            }))}
-          />
+          <ExportButton module="payouts" filename={`payouts-${status}.csv`} endpoint="payouts" params={{ ...params, status }} />
         }
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:mb-5 lg:grid-cols-4">
         <MiniStat label="Pending amount" value={formatCurrency(summary.pendingAmount)} accent hint="Net, awaiting approval" />
         <MiniStat label="Paid amount" value={formatCurrency(summary.paidAmount)} hint="Net, sent to banks" />
-        <MiniStat label="Gross earnings" value={formatCurrency(summary.gross)} />
-        <MiniStat label="Platform commission" value={formatCurrency(summary.commission)} />
+        <MiniStat label="Requested (gross)" value={formatCurrency(summary.gross)} hint="Earnings withdrawn" />
+        <MiniStat label="Platform charges" value={formatCurrency(summary.commission)} hint="Deducted from payouts" />
       </div>
 
       <Card>

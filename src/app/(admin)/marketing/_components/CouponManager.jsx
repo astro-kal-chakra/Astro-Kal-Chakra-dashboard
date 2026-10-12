@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { Pause, Play, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -7,12 +8,14 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { DataTable } from "@/components/ui/Table";
+import { DataTable, Pagination } from "@/components/ui/Table";
+import { FilterBar } from "@/components/common/FilterBar";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils";
-import { fromDateInput, toDateInput } from "./utils";
-import { NOW } from "@/lib/clock";
+import { toDateInput } from "./utils";
+import { now } from "@/lib/clock";
+import { activateCoupon, createCoupon, pauseCoupon } from "@/actions/marketing";
 
 function UsageBar({ usage, limit }) {
   if (!limit) {
@@ -36,41 +39,37 @@ function UsageBar({ usage, limit }) {
   );
 }
 
-export function CouponManager({ initial }) {
-  const [coupons, setCoupons] = useState(initial);
+export function CouponManager({ data, params }) {
+  // One server page of coupons (search / page live in the URL)
+  const [coupons, setCoupons] = useServerState(data.rows);
   const [creating, setCreating] = useState(false);
   const [type, setType] = useState("percent");
+  const [busy, setBusy] = useState(null);
   const toast = useToast();
   const { can } = useAdmin();
   // UI mirror of marketing:edit — the backend enforces the same check.
   const canEdit = can("marketing", "edit");
 
-  const setStatus = (c, status) => {
+  const setStatus = async (c, status) => {
+    setBusy(c.id);
+    const r = status === "paused" ? await pauseCoupon(c.id) : await activateCoupon(c.id);
+    setBusy(null);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setCoupons((list) => list.map((x) => (x.id === c.id ? { ...x, status } : x)));
     toast(status === "paused" ? "Coupon paused" : "Coupon activated", { description: c.code });
   };
 
-  const create = (e) => {
+  const create = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.currentTarget));
-    const value = Number(d.value);
-    const coupon = {
-      id: `CP${Date.now()}`,
-      code: d.code.trim().toUpperCase(),
-      type: d.type,
-      value,
-      maxDiscount: d.type === "flat" ? value : Number(d.maxDiscount) || null,
-      minRecharge: Number(d.minRecharge) || 0,
-      usage: 0,
-      limit: Number(d.limit) || null,
-      perUser: Number(d.perUser) || 1,
-      status: "active",
-      expiresAt: fromDateInput(d.expiresAt),
-    };
-    setCoupons((list) => [coupon, ...list]);
+    setBusy("form");
+    const r = await createCoupon({ ...d, type });
+    setBusy(null);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    if (r.data) setCoupons((list) => [r.data, ...list]);
     setCreating(false);
     setType("percent");
-    toast("Coupon created", { description: `${coupon.code} is now active.` });
+    toast("Coupon created", { description: `${d.code.trim().toUpperCase()} is now active.` });
   };
 
   const columns = [
@@ -92,7 +91,7 @@ export function CouponManager({ initial }) {
     {
       key: "expiresAt",
       label: "Expires",
-      render: (c) => <span className={cn(c.status !== "expired" && c.expiresAt - NOW < 7 * 86400000 && "font-semibold text-warning")}>{formatDate(c.expiresAt)}</span>,
+      render: (c) => <span className={cn(c.status !== "expired" && c.expiresAt - now() < 7 * 86400000 && "font-semibold text-warning")}>{formatDate(c.expiresAt)}</span>,
     },
     ...(canEdit
       ? [
@@ -102,11 +101,11 @@ export function CouponManager({ initial }) {
             align: "right",
             render: (c) =>
               c.status === "active" ? (
-                <Button size="xs" variant="ghost" icon={<Pause />} onClick={() => setStatus(c, "paused")}>
+                <Button size="xs" variant="ghost" icon={<Pause />} loading={busy === c.id} onClick={() => setStatus(c, "paused")}>
                   Pause
                 </Button>
               ) : c.status === "paused" ? (
-                <Button size="xs" variant="soft" icon={<Play />} onClick={() => setStatus(c, "active")}>
+                <Button size="xs" variant="soft" icon={<Play />} loading={busy === c.id} onClick={() => setStatus(c, "active")}>
                   Activate
                 </Button>
               ) : null,
@@ -120,7 +119,7 @@ export function CouponManager({ initial }) {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4">
           <p className="text-sm text-muted">
-            {coupons.filter((c) => c.status === "active").length} active · {coupons.length} total
+            {data.active ?? 0} active · {data.total} total
           </p>
           {canEdit && (
             <Button variant="primary" size="sm" icon={<Plus />} onClick={() => setCreating(true)}>
@@ -128,7 +127,9 @@ export function CouponManager({ initial }) {
             </Button>
           )}
         </div>
-        <DataTable columns={columns} rows={coupons} empty={{ title: "No coupons yet" }} />
+        <FilterBar searchPlaceholder="Search coupon code" />
+        <DataTable columns={columns} rows={coupons} empty={{ title: params.q ? "No matching coupons" : "No coupons yet" }} />
+        <Pagination {...data} basePath="/marketing/coupons" params={params} />
       </Card>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Create coupon" description="Applied at recharge. Discount is credited to the wallet." size="lg">
@@ -165,12 +166,12 @@ export function CouponManager({ initial }) {
                 <Input id="cp-per" name="perUser" type="number" min="1" max="10" defaultValue="1" required />
               </Field>
               <Field label="Expires on" htmlFor="cp-exp">
-                <Input id="cp-exp" name="expiresAt" type="date" required min={toDateInput(NOW)} defaultValue={toDateInput(NOW + 30 * 86400000)} />
+                <Input id="cp-exp" name="expiresAt" type="date" required min={toDateInput(now())} defaultValue={toDateInput(now() + 30 * 86400000)} />
               </Field>
             </div>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button onClick={() => setCreating(false)}>Cancel</Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={busy === "form"}>
                 Create coupon
               </Button>
             </div>

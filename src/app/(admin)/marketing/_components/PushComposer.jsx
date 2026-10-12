@@ -8,27 +8,42 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { cn } from "@/lib/utils";
-import { DEEP_LINKS } from "./utils";
+import { ASTRO_DEEP_LINKS, DEEP_LINKS } from "./utils";
+import { sendPush } from "@/actions/marketing";
 
 const TITLE_MAX = 50;
 const MAX_USERS = 100;
-const USER_ID = /^U\d{5,}$/;
+const ID_FORMAT = { users: /^U\d{5,}$/, astrologers: /^A\d{3,}$/ };
 
-/** "U10001, u10002,,U10001" → unique valid IDs + the invalid entries. */
-function parseUserIds(raw) {
+/** "U10001, u10002,,U10001" (or "A201, A202") → unique valid IDs + the invalid entries. */
+function parseUserIds(raw, recipients) {
+  const re = ID_FORMAT[recipients];
   const parts = raw.split(/[,\s]+/).map((p) => p.trim().toUpperCase()).filter(Boolean);
   const unique = [...new Set(parts)];
-  return { valid: unique.filter((id) => USER_ID.test(id)), invalid: unique.filter((id) => !USER_ID.test(id)) };
+  return { valid: unique.filter((id) => re.test(id)), invalid: unique.filter((id) => !re.test(id)) };
 }
 const BODY_MAX = 150;
 
-const SEGMENTS = [
-  { value: "recharged_30d", label: "Recharged in last 30 days" },
-  { value: "low_balance", label: "Wallet balance < ₹50" },
-  { value: "followers", label: "Follows an astrologer" },
-  { value: "inactive_14d", label: "Inactive for 14+ days" },
-  { value: "new_7d", label: "Joined in last 7 days" },
-];
+const SEGMENTS = {
+  users: [
+    { value: "recharged_30d", label: "Recharged in last 30 days" },
+    { value: "low_balance", label: "Wallet balance < ₹50" },
+    { value: "followers", label: "Follows an astrologer" },
+    { value: "inactive_14d", label: "Inactive for 14+ days" },
+    { value: "new_7d", label: "Joined in last 7 days" },
+  ],
+  astrologers: [
+    { value: "online_now", label: "Online right now" },
+    { value: "inactive_7d", label: "Not online in 7+ days" },
+    { value: "new_30d", label: "Approved in last 30 days" },
+    { value: "top_rated", label: "Rated 4.5★ or more" },
+  ],
+};
+
+const RECIPIENTS = {
+  users: { noun: "user", all: "All users", few: "Few users", placeholder: "U10234, U10235, U10236", app: "Astro app" },
+  astrologers: { noun: "astrologer", all: "All astrologers", few: "Few astrologers", placeholder: "A201, A202, A203", app: "AstroSide" },
+};
 
 function Radio({ name, value, checked, onChange, children }) {
   return (
@@ -47,8 +62,9 @@ function Radio({ name, value, checked, onChange, children }) {
 export function PushComposer() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [recipients, setRecipients] = useState("users");
   const [audience, setAudience] = useState("all");
-  const [segment, setSegment] = useState(SEGMENTS[0].value);
+  const [segment, setSegment] = useState(SEGMENTS.users[0].value);
   const [userIds, setUserIds] = useState("");
   const [link, setLink] = useState(DEEP_LINKS[0].value);
   const [when, setWhen] = useState("now");
@@ -58,14 +74,23 @@ export function PushComposer() {
   // UI mirror of marketing:edit — the backend enforces the same check (and rate limits sends).
   if (!can("marketing", "edit")) return null;
 
-  const ids = parseUserIds(userIds);
+  const r = RECIPIENTS[recipients];
+  const links = recipients === "astrologers" ? ASTRO_DEEP_LINKS : DEEP_LINKS;
+  const switchRecipients = (next) => {
+    setRecipients(next);
+    setSegment(SEGMENTS[next][0].value);
+    setUserIds("");
+    setLink((next === "astrologers" ? ASTRO_DEEP_LINKS : DEEP_LINKS)[0].value);
+  };
+
+  const ids = parseUserIds(userIds, recipients);
   const usersError =
     audience !== "users"
       ? null
       : ids.invalid.length
-        ? `Not a valid user ID: ${ids.invalid.join(", ")}`
+        ? `Not a valid ${r.noun} ID: ${ids.invalid.join(", ")}`
         : ids.valid.length > MAX_USERS
-          ? `Up to ${MAX_USERS} users at a time. Use a segment for larger audiences.`
+          ? `Up to ${MAX_USERS} ${r.noun}s at a time. Use a segment for larger audiences.`
           : null;
 
   const reset = () => {
@@ -79,11 +104,25 @@ export function PushComposer() {
     if (audience === "users" && (usersError || !ids.valid.length)) return;
     const form = new FormData(e.currentTarget);
     setSending(true);
-    await new Promise((r) => setTimeout(r, 400)); // simulated API call
+    const res = await sendPush({
+      ...Object.fromEntries(form),
+      recipients,
+      audience,
+      segment,
+      userIds: ids.valid.join(","),
+      deepLink: link,
+      when,
+    });
     setSending(false);
-    const who = audience === "all" ? "all users" : audience === "segment" ? SEGMENTS.find((s) => s.value === segment)?.label : `${ids.valid.length} user${ids.valid.length === 1 ? "" : "s"} (${ids.valid.slice(0, 3).join(", ")}${ids.valid.length > 3 ? "…" : ""})`;
+    if (!res.ok) return toast(res.error.message, { type: "error" });
+    const who =
+      audience === "all"
+        ? r.all.toLowerCase()
+        : audience === "segment"
+          ? `${r.noun}s · ${SEGMENTS[recipients].find((s) => s.value === segment)?.label}`
+          : `${ids.valid.length} ${r.noun}${ids.valid.length === 1 ? "" : "s"} (${ids.valid.slice(0, 3).join(", ")}${ids.valid.length > 3 ? "…" : ""})`;
     toast(when === "now" ? "Notification sent" : "Notification scheduled", {
-      description: when === "now" ? `Sending to ${who}.` : `Goes to ${who} on ${String(form.get("scheduleAt")).replace("T", " at ")}.`,
+      description: res.data?.message && res.data.message !== "OK" ? res.data.message : when === "now" ? `Sending to ${who}.` : `Goes to ${who} on ${String(form.get("scheduleAt")).replace("T", " at ")}.`,
     });
     reset();
   };
@@ -102,38 +141,53 @@ export function PushComposer() {
             </Field>
 
             <fieldset>
+              <legend className="mb-1.5 text-xs font-semibold text-text-2">Send to</legend>
+              <div className="flex flex-wrap gap-2">
+                <Radio name="recipients" value="users" checked={recipients === "users"} onChange={switchRecipients}>
+                  App users
+                </Radio>
+                <Radio name="recipients" value="astrologers" checked={recipients === "astrologers"} onChange={switchRecipients}>
+                  Astrologers
+                </Radio>
+              </div>
+              {recipients === "astrologers" && (
+                <p className="mt-1.5 text-xs text-muted">Goes to approved astrologers in the AstroSide app, right away (no quiet-hours hold).</p>
+              )}
+            </fieldset>
+
+            <fieldset>
               <legend className="mb-1.5 text-xs font-semibold text-text-2">Audience</legend>
               <div className="flex flex-wrap gap-2">
                 <Radio name="audience" value="all" checked={audience === "all"} onChange={setAudience}>
-                  All users
+                  {r.all}
                 </Radio>
                 <Radio name="audience" value="segment" checked={audience === "segment"} onChange={setAudience}>
                   Segment
                 </Radio>
                 <Radio name="audience" value="users" checked={audience === "users"} onChange={setAudience}>
-                  Few users
+                  {r.few}
                 </Radio>
               </div>
               {audience === "segment" && (
-                <Select aria-label="Segment" name="segment" value={segment} onChange={(e) => setSegment(e.target.value)} options={SEGMENTS} className="mt-2" />
+                <Select aria-label="Segment" name="segment" value={segment} onChange={(e) => setSegment(e.target.value)} options={SEGMENTS[recipients]} className="mt-2" />
               )}
               {audience === "users" && (
                 <div className="mt-2">
                   <Textarea
-                    aria-label="User IDs"
+                    aria-label={recipients === "astrologers" ? "Astrologer IDs" : "User IDs"}
                     name="userIds"
                     required
                     rows={2}
                     value={userIds}
                     onChange={(e) => setUserIds(e.target.value)}
-                    placeholder="U10234, U10235, U10236"
+                    placeholder={r.placeholder}
                     className={cn("min-h-0 font-mono", usersError && "border-danger focus:border-danger")}
                   />
                   <p className={cn("mt-1.5 text-xs", usersError ? "text-danger" : "text-muted")}>
                     {usersError ??
                       (ids.valid.length
-                        ? `${ids.valid.length} user${ids.valid.length === 1 ? "" : "s"} selected · duplicates removed`
-                        : `Separate user IDs with commas · up to ${MAX_USERS}`)}
+                        ? `${ids.valid.length} ${r.noun}${ids.valid.length === 1 ? "" : "s"} selected · duplicates removed`
+                        : `Separate ${r.noun} IDs with commas · up to ${MAX_USERS}`)}
                   </p>
                   {ids.valid.length > 0 && (
                     <ul className="mt-2 flex flex-wrap gap-1.5">
@@ -151,7 +205,7 @@ export function PushComposer() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Opens" htmlFor="pn-link">
-                <Select id="pn-link" name="deepLink" value={link} onChange={(e) => setLink(e.target.value)} options={[...DEEP_LINKS, { value: "custom", label: "Custom deep link…" }]} />
+                <Select id="pn-link" name="deepLink" value={link} onChange={(e) => setLink(e.target.value)} options={[...links, { value: "custom", label: "Custom deep link…" }]} />
               </Field>
               {link === "custom" && (
                 <Field label="Custom deep link" htmlFor="pn-custom">
@@ -181,14 +235,14 @@ export function PushComposer() {
             </div>
           </form>
 
-          <PhonePreview title={title} body={body} />
+          <PhonePreview title={title} body={body} app={r.app} />
         </div>
       </CardBody>
     </Card>
   );
 }
 
-function PhonePreview({ title, body }) {
+function PhonePreview({ title, body, app }) {
   return (
     <div className="mx-auto w-full max-w-[280px]">
       <p className="mb-2 text-center text-xs font-semibold text-muted">Preview</p>
@@ -200,7 +254,7 @@ function PhonePreview({ title, body }) {
             <span className="flex size-4 items-center justify-center rounded bg-violet-600 text-white">
               <Bell className="size-2.5" />
             </span>
-            <span className="font-semibold">Astro</span>
+            <span className="font-semibold">{app}</span>
             <span className="ml-auto">now</span>
           </div>
           <p className="truncate text-[13px] font-bold">{title || "Notification title"}</p>

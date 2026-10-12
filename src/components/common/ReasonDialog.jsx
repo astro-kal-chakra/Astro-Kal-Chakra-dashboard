@@ -14,6 +14,7 @@ import { SENSITIVE_REASONS } from "@/config/constants";
  *
  * `children` renders extra fields above the reason (e.g. amount). Their values
  * are collected through the form and passed to onConfirm as the 2nd argument.
+ * `onConfirm` may return a promise; resolving to `false` keeps the dialog open.
  */
 export function ReasonDialog({
   open,
@@ -46,10 +47,10 @@ export function ReasonDialog({
     if (!valid) return;
     setBusy(true);
     const data = Object.fromEntries(new FormData(e.currentTarget));
-    await new Promise((r) => setTimeout(r, 350)); // simulated API call
+    // onConfirm may be async (the API call); returning false keeps the dialog open to retry.
+    const ok = await onConfirm?.(reason, data);
     setBusy(false);
-    onConfirm?.(reason, data);
-    close();
+    if (ok !== false) close();
   };
 
   return (

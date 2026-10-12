@@ -7,6 +7,7 @@ import { Field, Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/providers/ToastProvider";
 import { cn } from "@/lib/utils";
+import { changePassword } from "@/actions/profile";
 
 const RULES = [
   { label: "At least 12 characters", test: (p) => p.length >= 12 },
@@ -42,8 +43,9 @@ export function PasswordForm() {
     e.preventDefault();
     if (!valid) return;
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 450)); // simulated POST /me/password
+    const r = await changePassword(current, next);
     setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setCurrent("");
     setNext("");
     setConfirm("");

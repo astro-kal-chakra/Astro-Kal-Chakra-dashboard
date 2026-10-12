@@ -1,5 +1,5 @@
 import { checkAccess } from "@/lib/session";
-import { getMarketing } from "@/services";
+import { getPacks } from "@/services";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PackManager } from "../_components/PackManager";
 
@@ -9,7 +9,7 @@ export default async function RechargePacksPage() {
   const { denied } = await checkAccess("marketing");
   if (denied) return denied;
 
-  const { packs } = await getMarketing();
+  const packs = await getPacks();
 
   return (
     <>

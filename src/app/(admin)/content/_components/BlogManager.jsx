@@ -1,5 +1,6 @@
 "use client";
 
+import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
 import { Pencil, Plus } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
@@ -7,30 +8,62 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { DataTable } from "@/components/ui/Table";
+import { DataTable, Pagination } from "@/components/ui/Table";
+import { FilterBar } from "@/components/common/FilterBar";
 import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { formatNumber, timeAgo } from "@/lib/utils";
-import { NOW } from "@/lib/clock";
+import { now } from "@/lib/clock";
+import { getBlog, saveBlog } from "@/actions/content";
 
 const CATEGORIES = ["Basics", "Transits", "Festivals", "Vastu", "Tarot", "Numerology"];
 
-export function BlogManager({ initial }) {
-  const [blogs, setBlogs] = useState(initial);
+const STATUS_FILTER = {
+  name: "status",
+  label: "Status",
+  options: [
+    { value: "all", label: "All statuses" },
+    { value: "published", label: "Published" },
+    { value: "review", label: "In review" },
+    { value: "draft", label: "Draft" },
+  ],
+};
+
+/** One server page of articles (search / status / page live in the URL). */
+export function BlogManager({ data, params }) {
+  const [blogs, setBlogs] = useServerState(data.rows);
+  const counts = data.counts ?? {};
   const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  // The list has no article bodies: load the full article before editing.
+  const open = async (b) => {
+    if (!b.id) return setEditing(b);
+    setEditing({ ...b, loading: true });
+    const r = await getBlog(b.id);
+    if (!r.ok) {
+      setEditing(null);
+      return toast(r.error.message, { type: "error" });
+    }
+    setEditing({ ...b, ...r.data, loading: false });
+  };
   const toast = useToast();
   const { admin, can } = useAdmin();
   // UI mirror of content:edit / content:approve — the backend enforces the same.
   const canEdit = can("content", "edit");
   const canPublish = can("content", "approve");
 
-  const save = (status) => {
+  const save = async (status) => {
     const form = document.getElementById("blog-form");
-    if (!form.reportValidity()) return;
+    if (!form?.reportValidity()) return;
     const d = Object.fromEntries(new FormData(form));
-    const patch = { title: d.title, category: d.category, body: d.body, status, updatedAt: NOW };
+    setBusy(true);
+    const r = await saveBlog(editing.id ?? null, d, status);
+    setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
+    const patch = { title: d.title, category: d.category, status, updatedAt: now(), ...r.data };
     if (editing.id) setBlogs((list) => list.map((b) => (b.id === editing.id ? { ...b, ...patch } : b)));
-    else setBlogs((list) => [{ id: `BL${Date.now()}`, author: admin?.name ?? "Content team", views: 0, ...patch }, ...list]);
+    else setBlogs((list) => [{ author: admin?.name ?? "Content team", views: 0, ...patch }, ...list]);
     toast({ published: "Article published", review: "Sent for review", draft: "Draft saved" }[status], { description: d.title });
     setEditing(null);
   };
@@ -52,7 +85,7 @@ export function BlogManager({ initial }) {
     { key: "views", label: "Views", align: "right", render: (b) => (b.views ? formatNumber(b.views) : "—") },
     { key: "updatedAt", label: "Updated", hideOnMobile: true, render: (b) => timeAgo(b.updatedAt) },
     ...(canEdit
-      ? [{ key: "edit", label: "", align: "right", render: (b) => <Button size="icon-sm" variant="ghost" aria-label={`Edit ${b.title}`} icon={<Pencil />} onClick={() => setEditing(b)} /> }]
+      ? [{ key: "edit", label: "", align: "right", render: (b) => <Button size="icon-sm" variant="ghost" aria-label={`Edit ${b.title}`} icon={<Pencil />} onClick={() => open(b)} /> }]
       : []),
   ];
 
@@ -61,7 +94,7 @@ export function BlogManager({ initial }) {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4">
           <p className="text-sm text-muted">
-            {blogs.filter((b) => b.status === "published").length} published · {blogs.filter((b) => b.status !== "published").length} in progress
+            {formatNumber(counts.published ?? 0)} published · {formatNumber((counts.draft ?? 0) + (counts.review ?? 0))} in progress
           </p>
           {canEdit && (
             <Button variant="primary" size="sm" icon={<Plus />} onClick={() => setEditing({})}>
@@ -69,7 +102,9 @@ export function BlogManager({ initial }) {
             </Button>
           )}
         </div>
-        <DataTable columns={columns} rows={blogs} empty={{ title: "No articles yet" }} />
+        <FilterBar searchPlaceholder="Search title, article ID or category" filters={[STATUS_FILTER]} />
+        <DataTable columns={columns} rows={blogs} empty={{ title: params.q || params.status ? "No matching articles" : "No articles yet" }} />
+        <Pagination {...data} basePath="/content" params={params} />
       </Card>
 
       <Modal
@@ -80,20 +115,23 @@ export function BlogManager({ initial }) {
         footer={
           <>
             <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={() => save("draft")}>Save draft</Button>
+            <Button onClick={() => save("draft")} disabled={busy || editing?.loading}>
+              Save draft
+            </Button>
             {canPublish ? (
-              <Button variant="primary" onClick={() => save("published")}>
+              <Button variant="primary" loading={busy} disabled={editing?.loading} onClick={() => save("published")}>
                 Publish
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => save("review")}>
+              <Button variant="primary" loading={busy} disabled={editing?.loading} onClick={() => save("review")}>
                 Send for review
               </Button>
             )}
           </>
         }
       >
-        {editing && (
+        {editing?.loading && <p className="py-10 text-center text-sm text-muted">Loading article…</p>}
+        {editing && !editing.loading && (
           <form id="blog-form" onSubmit={(e) => e.preventDefault()} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-[1fr_200px]">
               <Field label="Title" htmlFor="bl-title">
@@ -109,7 +147,7 @@ export function BlogManager({ initial }) {
                 name="body"
                 required
                 rows={12}
-                defaultValue={editing.body ?? (editing.id ? `# ${editing.title}\n\n` : "")}
+                defaultValue={editing.body ?? ""}
                 placeholder="Start writing…"
                 className="font-mono text-[13px]"
               />

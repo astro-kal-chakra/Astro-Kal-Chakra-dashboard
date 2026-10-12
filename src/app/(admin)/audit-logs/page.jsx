@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 import { checkAccess } from "@/lib/session";
-import { getAuditLogs } from "@/services";
+import { getAuditLog, getAuditLogs } from "@/services";
 import { buildHref, flatParams } from "@/lib/url";
 import { MODULES } from "@/config/permissions";
 import { formatDateTime, formatNumber } from "@/lib/utils";
@@ -25,16 +25,17 @@ export default async function AuditLogsPage({ searchParams }) {
   const params = flatParams(await searchParams);
   const data = await getAuditLogs(params);
   const { log: openId, ...listParams } = params;
-  const openLog = openId ? (data.rows.find((l) => l.id === openId) ?? null) : null;
+  // The detail endpoint adds the admin's current account state; fall back to the row on this page.
+  const openLog = openId ? ((await getAuditLog(openId)) ?? data.rows.find((l) => l.id === openId) ?? null) : null;
 
   const filters = [
-    { name: "admin", label: "All admins", options: data.admins.map((a) => ({ value: a.id, label: a.name })) },
+    { name: "admin", label: "All admins", options: (data.admins ?? []).map((a) => ({ value: a.id, label: a.name })) },
     { name: "module", label: "All modules", options: MODULE_OPTIONS },
   ];
 
   const columns = [
     { key: "createdAt", label: "Time", render: (l) => <span className="tabular-nums">{formatDateTime(l.createdAt)}</span> },
-    { key: "adminName", label: "Admin", render: (l) => <PersonCell name={l.adminName} sub={l.adminId} /> },
+    { key: "adminName", label: "Admin", render: (l) => <PersonCell name={l.adminName} sub={[l.adminId, l.adminRoleName].filter(Boolean).join(" · ")} /> },
     {
       key: "action",
       label: "Action",
@@ -45,9 +46,31 @@ export default async function AuditLogsPage({ searchParams }) {
         </div>
       ),
     },
-    { key: "target", label: "Target", render: (l) => <span className="font-mono text-xs">{l.target}</span> },
+    {
+      key: "target",
+      label: "Target",
+      render: (l) => (
+        <span className="block min-w-0">
+          {l.targetInfo?.name && <span className="block max-w-56 truncate text-text">{l.targetInfo.name}</span>}
+          <span className="block font-mono text-xs text-muted">
+            {l.targetInfo?.type ? `${l.targetInfo.type} · ` : ""}
+            {l.target}
+          </span>
+        </span>
+      ),
+    },
     { key: "reason", label: "Reason", hideOnMobile: true, className: "max-w-64 truncate", render: (l) => l.reason ?? <span className="text-muted">—</span> },
-    { key: "ip", label: "IP", hideOnMobile: true, render: (l) => <span className="font-mono text-xs">{l.ip}</span> },
+    {
+      key: "ip",
+      label: "From",
+      hideOnMobile: true,
+      render: (l) => (
+        <span className="block">
+          <span className="block font-mono text-xs">{l.ip ?? "—"}</span>
+          {l.device && <span className="block text-xs text-muted">{l.device.device} · {l.device.browser}</span>}
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -56,23 +79,7 @@ export default async function AuditLogsPage({ searchParams }) {
         title="Audit logs"
         description={`${formatNumber(data.total)} entries match your filters`}
         actions={
-          <ExportButton
-            module="audit"
-            filename="audit-logs.csv"
-            rows={data.rows.map((l) => ({
-              id: l.id,
-              time: new Date(l.createdAt).toISOString(),
-              admin: l.adminName,
-              adminId: l.adminId,
-              action: l.action,
-              label: l.label,
-              module: l.module,
-              target: l.target,
-              reason: l.reason ?? "",
-              ip: l.ip,
-              userAgent: l.userAgent,
-            }))}
-          />
+          <ExportButton module="audit" filename="audit-logs.csv" endpoint="audit-logs" params={listParams} />
         }
       />
 

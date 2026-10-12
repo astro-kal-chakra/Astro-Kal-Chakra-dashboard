@@ -3,7 +3,8 @@ import { cn } from "@/lib/utils";
 
 const base =
   "w-full rounded-lg border border-border bg-surface text-sm text-text placeholder:text-muted shadow-soft transition-colors " +
-  "hover:border-border-strong focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15 disabled:opacity-60";
+  "hover:border-border-strong focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15 disabled:opacity-60 " +
+  "aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/15";
 
 export function Input({ className, icon, ...props }) {
   if (icon) {
@@ -50,7 +51,8 @@ export function Label({ htmlFor, children, hint, className }) {
   );
 }
 
-export function Field({ label, htmlFor, hint, help, className, children }) {
+/** `error`: message shown under the input in place of `help` (give the input aria-invalid too). */
+export function Field({ label, htmlFor, hint, help, error, className, children }) {
   return (
     <div className={className}>
       {label && (
@@ -59,7 +61,13 @@ export function Field({ label, htmlFor, hint, help, className, children }) {
         </Label>
       )}
       {children}
-      {help && <p className="mt-1.5 text-xs text-muted">{help}</p>}
+      {error ? (
+        <p id={htmlFor ? `${htmlFor}-error` : undefined} role="alert" className="mt-1.5 text-xs font-medium text-danger">
+          {error}
+        </p>
+      ) : (
+        help && <p className="mt-1.5 text-xs text-muted">{help}</p>
+      )}
     </div>
   );
 }

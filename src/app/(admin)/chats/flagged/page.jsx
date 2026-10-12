@@ -12,6 +12,7 @@ import { TabLinks } from "@/components/ui/Tabs";
 import { Field, Input } from "@/components/ui/Input";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ActionButton } from "@/components/common/ActionButton";
+import { blockFromFlag, commissionFromFlag, dismissFlag, warnFlag } from "@/actions/sessions";
 
 export const metadata = { title: "Flagged chats" };
 
@@ -32,7 +33,7 @@ export default async function FlaggedChatsPage({ searchParams }) {
   const { typeLabels, counts } = data;
 
   const filters = [
-    { name: "type", label: "All types", options: Object.entries(typeLabels).map(([value, label]) => ({ value, label })) },
+    { name: "type", label: "All types", options: Object.entries(typeLabels ?? {}).map(([value, label]) => ({ value, label })) },
     { name: "severity", label: "Any severity", options: SEVERITY },
   ];
 
@@ -147,6 +148,7 @@ function FlagActions({ flag }) {
         dialogDescription="They get an in-app warning about this message. Repeat warnings lead to a block."
         confirmLabel="Send warning"
         success="Warning sent"
+        run={warnFlag.bind(null, flag.id)}
       >
         Warn
       </ActionButton>
@@ -159,6 +161,7 @@ function FlagActions({ flag }) {
         dialogTitle={`Block ${who}`}
         dialogDescription="The account is signed out and can't take or start sessions."
         success="Account blocked"
+        run={blockFromFlag.bind(null, flag.id)}
       >
         Block
       </ActionButton>
@@ -168,17 +171,18 @@ function FlagActions({ flag }) {
           size="xs"
           reason
           icon={<Percent />}
-          dialogTitle={`Reduce commission · ${flag.astrologerName}`}
-          dialogDescription="Sets a new platform commission for this astrologer's future sessions."
-          confirmLabel="Apply new commission"
-          success="Commission updated"
+          dialogTitle={`Change platform charge · ${flag.astrologerName}`}
+          dialogDescription="Sets a new platform charge for this astrologer's future payout requests."
+          confirmLabel="Apply new platform charge"
+          success="Platform charge updated"
+          run={commissionFromFlag.bind(null, flag.id)}
           fields={
-            <Field label="New commission (%)" htmlFor={`comm-${flag.id}`} hint="Platform share">
+            <Field label="New platform charge (%)" htmlFor={`comm-${flag.id}`} hint="Of each payout">
               <Input id={`comm-${flag.id}`} name="commission" type="number" min="1" max="90" required placeholder="40" />
             </Field>
           }
         >
-          Commission
+          Platform charge
         </ActionButton>
       )}
       <ActionButton
@@ -191,6 +195,7 @@ function FlagActions({ flag }) {
         dialogDescription="Mark this as a false positive. No action is taken on the account."
         confirmLabel="Dismiss"
         success="Flag dismissed"
+        run={dismissFlag.bind(null, flag.id)}
       >
         Dismiss
       </ActionButton>

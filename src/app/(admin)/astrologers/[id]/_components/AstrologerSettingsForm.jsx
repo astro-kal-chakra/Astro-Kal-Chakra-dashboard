@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/Switch";
 import { ReasonDialog } from "@/components/common/ReasonDialog";
 import { useAdmin } from "@/providers/AdminProvider";
 import { useToast } from "@/providers/ToastProvider";
+import { saveAstrologerSettings } from "@/actions/astrologers";
 
 const BADGES = [
   { value: "Verified", hint: "KYC and certificates checked" },
@@ -25,28 +26,44 @@ const MODES = [
 const OFFLINE_REASONS = ["Repeated missed requests", "Complaint under review", "Quality review", "Astrologer asked for it"];
 
 /**
- * Per-astrologer settings. UI-only: Save shows a toast. The backend must
- * re-check `astrologers.edit` and validate the limits.
+ * Per-astrologer settings → `PATCH /admin/astrologers/:id/settings`. The backend
+ * re-checks `astrologers.edit`, validates the limits and audit-logs the change.
  */
 export function AstrologerSettingsForm({ astrologer }) {
   const { can } = useAdmin();
   const toast = useToast();
   const editable = can("astrologers", "edit");
 
-  const [badges, setBadges] = useState(astrologer.badges);
-  const [forcedOffline, setForcedOffline] = useState(false);
-  const [offlineReason, setOfflineReason] = useState("");
+  const saved = astrologer.settings ?? {};
+  const limits = saved.priceLimits ?? {};
+  const [badges, setBadges] = useState(astrologer.badges ?? []);
+  const [forcedOffline, setForcedOffline] = useState(Boolean(saved.forcedOffline?.on));
+  const [offlineReason, setOfflineReason] = useState(saved.forcedOffline?.reason ?? "");
   const [askReason, setAskReason] = useState(false);
-  const [queuePaused, setQueuePaused] = useState(false);
+  const [queuePaused, setQueuePaused] = useState(Boolean(saved.queuePaused));
   const [saving, setSaving] = useState(false);
 
   const toggleBadge = (b, on) => setBadges((list) => (on ? [...list, b] : list.filter((x) => x !== b)));
 
   const submit = async (e) => {
     e.preventDefault();
+    const d = Object.fromEntries(new FormData(e.currentTarget));
+    for (const m of MODES) {
+      if (Number(d[`${m.key}Min`]) > Number(d[`${m.key}Max`])) {
+        toast(`${m.label}: the minimum is higher than the maximum`, { type: "error" });
+        return;
+      }
+    }
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400)); // simulated API call
+    const r = await saveAstrologerSettings(astrologer.id, {
+      commission: d.commission,
+      priceLimits: Object.fromEntries(MODES.map((m) => [m.key, { min: d[`${m.key}Min`], max: d[`${m.key}Max`] }])),
+      badges,
+      forceOffline: { on: forcedOffline, reason: offlineReason },
+      queuePaused,
+    });
     setSaving(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     toast("Settings saved", { type: "success", description: `${astrologer.name} · recorded in audit log` });
   };
 
@@ -57,9 +74,9 @@ export function AstrologerSettingsForm({ astrologer }) {
           {!editable && <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted">You can view these settings but not change them.</p>}
   
           <section>
-            <h3 className="mb-3 text-sm font-bold text-text">Commission and pricing</h3>
+            <h3 className="mb-3 text-sm font-bold text-text">Platform charge and pricing</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Platform commission (%)" htmlFor="commission" help="Taken from every paid session.">
+              <Field label="Platform charge (%)" htmlFor="commission" help="Deducted when the astrologer requests a payout. Sessions pay them in full.">
                 <Input id="commission" name="commission" type="number" min="0" max="80" step="1" defaultValue={astrologer.commission} required />
               </Field>
             </div>
@@ -71,10 +88,10 @@ export function AstrologerSettingsForm({ astrologer }) {
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="Min ₹/min" htmlFor={`${m.key}-min`}>
-                      <Input id={`${m.key}-min`} name={`${m.key}Min`} type="number" min="0" defaultValue={5} />
+                      <Input id={`${m.key}-min`} name={`${m.key}Min`} type="number" min="0" defaultValue={limits[m.key]?.min ?? 5} />
                     </Field>
                     <Field label="Max ₹/min" htmlFor={`${m.key}-max`}>
-                      <Input id={`${m.key}-max`} name={`${m.key}Max`} type="number" min="1" defaultValue={Math.ceil((astrologer[`${m.key}Price`] * 1.5) / 10) * 10} />
+                      <Input id={`${m.key}-max`} name={`${m.key}Max`} type="number" min="1" defaultValue={limits[m.key]?.max || Math.ceil((astrologer[`${m.key}Price`] * 1.5) / 10) * 10} />
                     </Field>
                   </div>
                 </div>

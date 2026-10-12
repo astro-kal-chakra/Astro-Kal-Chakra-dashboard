@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { useAdmin } from "@/providers/AdminProvider";
 import { useToast } from "@/providers/ToastProvider";
+import { inviteAdmin } from "@/actions/admins";
 
 /** Invite a new admin. Hidden without admins:edit — the backend enforces the same check. */
 export function InviteAdminButton({ roleOptions }) {
@@ -21,11 +22,18 @@ export function InviteAdminButton({ roleOptions }) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget));
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 400)); // simulated POST /admins/invite
+    const r = await inviteAdmin(data);
     setBusy(false);
+    if (!r.ok) return toast(r.error.message, { type: "error" });
     setOpen(false);
-    const role = roleOptions.find((r) => r.value === data.role)?.label;
-    toast("Invite sent", { description: `${data.email} · ${role}` });
+    const role = roleOptions.find((o) => o.value === data.role)?.label;
+    const { emailSent, inviteUrl } = r.data?.data ?? {};
+    if (emailSent) toast("Invite sent", { description: `${data.email} · ${role}` });
+    else {
+      // Email isn't configured on the backend: give the link to share by hand (dev/staging only).
+      if (inviteUrl) navigator.clipboard?.writeText(inviteUrl).catch(() => {});
+      toast("Invite created · email not configured", { type: "warning", duration: 10000, description: inviteUrl ? `Link copied: ${inviteUrl}` : "Share the invite link from the server log." });
+    }
   };
 
   return (

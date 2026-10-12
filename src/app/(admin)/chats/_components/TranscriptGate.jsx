@@ -9,16 +9,18 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ReasonDialog } from "@/components/common/ReasonDialog";
 import { useToast } from "@/providers/ToastProvider";
+import { openChat } from "@/actions/sessions";
 
 /**
- * Locks the transcript until the admin gives a reason. The reason is
- * audit-logged. In production `messages` would be fetched from the API after
- * the reason POST succeeds (the backend re-checks chats:view); here they are
- * passed in as props because the app is UI-only.
+ * Locks the transcript until the admin gives a reason. The reason goes to
+ * `POST /admin/chats/:id/open` (audit-logged; the backend re-checks chats:view,
+ * or the linked ticket for support agents) and only then are the messages
+ * returned. `initial` is `{ access, messages }` when a grant is still valid.
  */
-export function TranscriptGate({ summary, messages }) {
+export function TranscriptGate({ summary, ticketId, initial }) {
   const [open, setOpen] = useState(false);
-  const [access, setAccess] = useState(null);
+  const [access, setAccess] = useState(initial?.access ?? null);
+  const [messages, setMessages] = useState(initial?.messages ?? []);
   const toast = useToast();
 
   const details = (cols) => (
@@ -55,9 +57,14 @@ export function TranscriptGate({ summary, messages }) {
           title="Open chat transcript"
           description={`Session ${summary.id} · ${summary.userName} with ${summary.astrologerName}`}
           confirmLabel="Open transcript"
-          onConfirm={(reason) => {
-            // Production: POST { sessionId, reason } → then GET the messages.
-            setAccess({ reason, at: Date.now() });
+          onConfirm={async (reason) => {
+            const r = await openChat(summary.id, ticketId, reason);
+            if (!r.ok) {
+              toast(r.error.message, { type: "error" });
+              return false;
+            }
+            setMessages(r.data.messages);
+            setAccess(r.data.access);
             toast("Transcript opened", { description: `Reason: ${reason}` });
           }}
         />
@@ -79,6 +86,13 @@ export function TranscriptGate({ summary, messages }) {
           <CardHeader title="Transcript" description="Read-only · user on the left, astrologer on the right" />
           <ol className="space-y-3 p-4 sm:p-5">
             {messages.map((m) => {
+              if (m.from === "system") {
+                return (
+                  <li key={m.id} className="text-center text-xs text-muted">
+                    {m.text} · {formatTime(m.at)}
+                  </li>
+                );
+              }
               const astro = m.from === "astrologer";
               return (
                 <li key={m.id} className={cn("flex", astro ? "justify-end" : "justify-start")}>

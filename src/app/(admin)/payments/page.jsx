@@ -60,22 +60,7 @@ export default async function PaymentsPage({ searchParams }) {
             <Button size="sm" href="/payments/reconciliation" icon={<Scale />}>
               <span className="max-sm:hidden">Reconciliation</span>
             </Button>
-            <ExportButton
-              module="payments"
-              filename="payments.csv"
-              rows={data.rows.map((p) => ({
-                order: p.id,
-                user: p.userName,
-                userId: p.userId,
-                pack: p.pack,
-                method: p.method,
-                amount: p.amount,
-                status: p.status,
-                gatewayOrderId: p.gatewayOrderId,
-                gatewayPaymentId: p.gatewayPaymentId ?? "",
-                date: formatDateTime(p.createdAt),
-              }))}
-            />
+            <ExportButton module="payments" filename="payments.csv" endpoint="payments" params={params} />
           </>
         }
       />

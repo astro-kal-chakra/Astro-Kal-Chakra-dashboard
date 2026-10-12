@@ -1,5 +1,5 @@
 import { checkAccess } from "@/lib/session";
-import { getSettings } from "@/services";
+import { getFreeChatAstrologers, getSettings } from "@/services";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SettingsForm } from "./_components/SettingsForm";
 
@@ -10,12 +10,12 @@ export default async function SettingsPage() {
   const { denied } = await checkAccess("settings");
   if (denied) return denied;
 
-  const settings = await getSettings();
+  const [settings, freeChat] = await Promise.all([getSettings(), getFreeChatAstrologers()]);
 
   return (
     <>
       <PageHeader title="Settings" description="Platform-wide rules. Every change is recorded in the audit log." />
-      <SettingsForm initial={settings} />
+      <SettingsForm initial={settings} freeChatAstrologers={freeChat} />
     </>
   );
 }

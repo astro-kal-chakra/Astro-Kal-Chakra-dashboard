@@ -74,22 +74,7 @@ export default async function WalletLedgerPage({ searchParams }) {
         title="Wallet ledger"
         description={`${formatNumber(data.total)} entries · every credit and debit has a reason and a reference`}
         actions={
-          <ExportButton
-            module="payments"
-            filename="wallet-ledger.csv"
-            rows={data.rows.map((l) => ({
-              id: l.id,
-              date: formatDateTime(l.createdAt),
-              user: l.userName,
-              userId: l.userId,
-              type: l.type,
-              amount: l.amount,
-              reason: l.reason,
-              reference: l.reference,
-              balanceAfter: l.balanceAfter,
-              by: l.by,
-            }))}
-          />
+          <ExportButton module="payments" filename="wallet-ledger.csv" endpoint="wallet-ledger" params={params} />
         }
       />
       <Card>
