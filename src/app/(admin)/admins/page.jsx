@@ -118,7 +118,7 @@ export default async function AdminsPage({ searchParams }) {
       align: "right",
       render: (a) => (
         <AdminRowActions
-          admin={{ id: a.id, name: a.name, role: a.role, status: a.status, twoFactor: a.twoFactor, permissionOverrides: a.permissionOverrides }}
+          admin={{ id: a.id, name: a.name, email: a.email, role: a.role, status: a.status, twoFactor: a.twoFactor, permissionOverrides: a.permissionOverrides }}
           roleOptions={roleOptions}
           rolePermissions={roleMap[a.role]?.permissions ?? {}}
         />

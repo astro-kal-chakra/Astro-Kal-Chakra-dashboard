@@ -75,7 +75,7 @@ export function AdminRowActions({ admin, roleOptions, rolePermissions }) {
   const resendInvite = async () => {
     setBusy(true);
     const r = await inviteAdmin({
-      name: admin.name,
+      name: admin.name || admin.email?.split("@")[0],
       email: admin.email,
       role: current,
     });
