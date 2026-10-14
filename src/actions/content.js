@@ -1,6 +1,6 @@
 "use server";
 
-import { api, seg } from "@/lib/api";
+import { ApiError, api, seg } from "@/lib/api";
 import { num, run, str } from "@/lib/action";
 
 /* ---------------- Horoscopes (daily / weekly / monthly / yearly) ---------------- */
@@ -35,15 +35,50 @@ export async function saveHoroscope(sign, d = {}, publish = false, { period = "d
 }
 
 /* ---------------- Blogs ---------------- */
-/** Full article with its Markdown `body` (the list only has metadata). */
+/** Full article with its `body` (rich-text HTML, or Markdown for older articles) — the list only has metadata. */
 export async function getBlog(id) {
   return run(() => api(`/blogs/${seg(id)}`), { refresh: false });
 }
 
 /** `status`: draft | review | published (publishing needs content:approve). */
 export async function saveBlog(id, d = {}, status = "draft") {
-  const body = { title: str(d.title), category: str(d.category), body: String(d.body ?? ""), status: ["draft", "review", "published"].includes(status) ? status : "draft" };
+  const body = {
+    title: str(d.title),
+    category: str(d.category),
+    body: String(d.body ?? ""),
+    bodyFormat: d.bodyFormat === "markdown" ? "markdown" : "html",
+    // "" clears the cover image / video
+    cover: String(d.cover ?? ""),
+    video: String(d.video ?? ""),
+    status: ["draft", "review", "published"].includes(status) ? status : "draft",
+  };
   return run(() => (id ? api(`/blogs/${seg(id)}`, { method: "PATCH", body }) : api("/blogs", { method: "POST", body })));
+}
+
+const BLOG_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const BLOG_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+const MB = 1024 * 1024;
+
+/**
+ * Uploads an image (JPG/PNG/WebP, 10 MB) or a short video (MP4/WebM, 50 MB) for a blog article → `{ url }`.
+ * The backend checks the real file type again.
+ */
+export async function uploadBlogMedia(formData) {
+  return run(
+    async () => {
+      const file = formData.get("file");
+      if (!file || typeof file === "string" || !file.size) throw new ApiError(400, "NO_FILE", "Choose a file.");
+      const isImage = BLOG_IMAGE_TYPES.includes(file.type);
+      const isVideo = BLOG_VIDEO_TYPES.includes(file.type);
+      if (!isImage && !isVideo) throw new ApiError(400, "BAD_FILE", "Use a JPG, PNG or WebP image, or an MP4 / WebM video.");
+      if (isImage && file.size > 10 * MB) throw new ApiError(400, "FILE_TOO_LARGE", "Images can be up to 10 MB.");
+      if (isVideo && file.size > 50 * MB) throw new ApiError(400, "FILE_TOO_LARGE", "Videos can be up to 50 MB. Use a YouTube link for longer videos.");
+      const form = new FormData();
+      form.append("file", file, file.name);
+      return isImage ? api("/uploads/image", { method: "POST", query: { folder: "blog" }, form }) : api("/uploads/video", { method: "POST", form });
+    },
+    { refresh: false },
+  );
 }
 
 /* ---------------- FAQs ---------------- */

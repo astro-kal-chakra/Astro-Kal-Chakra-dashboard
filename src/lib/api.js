@@ -82,5 +82,9 @@ export async function api(path, { method = "GET", query, keep, body, form, nullO
   const err = json?.error ?? {};
   if (res.status === 401) redirect(`/signout?reason=${SIGNOUT_REASONS[err.code] ?? "expired"}`);
   if (res.status === 404 && nullOn404) return null;
+  // A 413 without our JSON comes from the web server in front of the API (e.g. Nginx client_max_body_size)
+  if (res.status === 413 && !err.message) {
+    throw new ApiError(413, "PAYLOAD_TOO_LARGE", "This file is larger than the server accepts. Raise the upload limit on the API server (Nginx client_max_body_size) or use a smaller file.");
+  }
   throw new ApiError(res.status, err.code ?? "ERROR", err.message || `Request failed (${res.status})`, err.details);
 }

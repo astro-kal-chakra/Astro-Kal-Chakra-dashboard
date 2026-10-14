@@ -6,7 +6,7 @@ import { Pencil, Plus } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Field, Input, Select, Textarea } from "@/components/ui/Input";
+import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { DataTable, Pagination } from "@/components/ui/Table";
 import { FilterBar } from "@/components/common/FilterBar";
@@ -15,6 +15,8 @@ import { useAdmin } from "@/providers/AdminProvider";
 import { formatNumber, timeAgo } from "@/lib/utils";
 import { now } from "@/lib/clock";
 import { getBlog, saveBlog } from "@/actions/content";
+import { RichTextEditor } from "@/components/editor/RichTextEditor";
+import { BlogCoverField } from "./BlogCoverField";
 
 const CATEGORIES = ["Basics", "Transits", "Festivals", "Vastu", "Tarot", "Numerology"];
 
@@ -57,6 +59,9 @@ export function BlogManager({ data, params }) {
     const form = document.getElementById("blog-form");
     if (!form?.reportValidity()) return;
     const d = Object.fromEntries(new FormData(form));
+    if (!String(d.body ?? "").replace(/<[^>]+>/g, "").trim() && !/<(img|video|iframe)/i.test(String(d.body ?? ""))) {
+      return toast("Write the article first", { type: "error" });
+    }
     setBusy(true);
     const r = await saveBlog(editing.id ?? null, d, status);
     setBusy(false);
@@ -141,16 +146,12 @@ export function BlogManager({ data, params }) {
                 <Select id="bl-cat" name="category" defaultValue={editing.category ?? CATEGORIES[0]} options={CATEGORIES} />
               </Field>
             </div>
-            <Field label="Body" htmlFor="bl-body" help="Markdown supported. Keep paragraphs short for mobile readers.">
-              <Textarea
-                id="bl-body"
-                name="body"
-                required
-                rows={12}
-                defaultValue={editing.body ?? ""}
-                placeholder="Start writing…"
-                className="font-mono text-[13px]"
-              />
+            <BlogCoverField cover={editing.cover} video={editing.video} />
+            <Field
+              label="Article"
+              help="Use the toolbar for headings, text size, lists and colour. Insert images or short videos where the cursor is — they show in the middle of the article on the website, exactly as here."
+            >
+              <RichTextEditor name="body" defaultValue={editing.body ?? ""} placeholder="Start writing your article…" />
             </Field>
           </form>
         )}
