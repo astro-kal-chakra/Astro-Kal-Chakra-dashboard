@@ -13,6 +13,7 @@ import { Field, Input } from "@/components/ui/Input";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ActionButton } from "@/components/common/ActionButton";
 import { blockFromFlag, commissionFromFlag, dismissFlag, warnFlag } from "@/actions/sessions";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export const metadata = { title: "Flagged chats" };
 
@@ -82,6 +83,7 @@ export default async function FlaggedChatsPage({ searchParams }) {
 
   return (
     <>
+      <MarkSeen section="chats" />
       <PageHeader
         back={{ href: "/chats", label: "All chats" }}
         title="Flagged chats"

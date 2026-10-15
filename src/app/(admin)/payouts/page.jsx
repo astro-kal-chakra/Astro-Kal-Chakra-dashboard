@@ -10,6 +10,7 @@ import { TabLinks } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ExportButton } from "@/components/common/ExportButton";
 import { PayoutTable } from "./_components/PayoutTable";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export const metadata = { title: "Payouts" };
 
@@ -35,6 +36,7 @@ export default async function PayoutsPage({ searchParams }) {
 
   return (
     <>
+      <MarkSeen section="payouts" />
       <PageHeader
         title="Payouts"
         description={`${formatNumber(data.counts.requested ?? 0)} payout requests waiting for approval`}

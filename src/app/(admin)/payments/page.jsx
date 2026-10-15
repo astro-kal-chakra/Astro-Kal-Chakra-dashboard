@@ -12,6 +12,7 @@ import { PersonCell } from "@/components/ui/Avatar";
 import { TabLinks } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ExportButton } from "@/components/common/ExportButton";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export const metadata = { title: "Payments" };
 
@@ -46,6 +47,7 @@ export default async function PaymentsPage({ searchParams }) {
 
   return (
     <>
+      <MarkSeen section="payments" />
       <PageHeader
         title="Payments"
         description={`${formatNumber(data.total)} orders match your filters`}

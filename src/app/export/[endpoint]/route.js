@@ -24,7 +24,8 @@ export async function GET(request, { params }) {
   }
   if (res.status === 401) {
     const code = (await res.json().catch(() => null))?.error?.code;
-    return Response.redirect(new URL(`/signout?reason=${code === "SIGNED_IN_ELSEWHERE" ? "elsewhere" : "expired"}`, request.url), 303);
+    // Relative Location (see app/signout/route.js): keeps the dashboard's real domain behind a proxy
+    return new Response(null, { status: 303, headers: { Location: `/signout?reason=${code === "SIGNED_IN_ELSEWHERE" ? "elsewhere" : "expired"}` } });
   }
   if (!res.ok) {
     const json = await res.json().catch(() => null);

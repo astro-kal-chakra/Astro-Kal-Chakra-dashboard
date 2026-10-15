@@ -12,6 +12,7 @@ import { PersonCell } from "@/components/ui/Avatar";
 import { TabLinks } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/common/FilterBar";
 import { TICKET_CATEGORIES, TICKET_PRIORITIES as PRIORITIES, TICKET_STATUSES as STATUSES } from "./_components/constants";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export const metadata = { title: "Support tickets" };
 
@@ -56,6 +57,7 @@ export default async function SupportInboxPage({ searchParams }) {
 
   return (
     <>
+      <MarkSeen section="support" />
       <PageHeader
         title="Support tickets"
         description={`${formatNumber(data.total)} ${status} tickets match your filters`}

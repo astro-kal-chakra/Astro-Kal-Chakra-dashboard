@@ -14,6 +14,7 @@ import {
   Settings,
   ShieldCheck,
   ScrollText,
+  Inbox,
 } from "lucide-react";
 
 /**
@@ -86,6 +87,7 @@ export const NAV_SECTIONS = [
           { label: "Canned replies", href: "/support/canned-replies" },
         ],
       },
+      { label: "Enquiries", href: "/enquiries", icon: Inbox, module: "support", badgeKey: "newLeads" },
       {
         label: "Marketing",
         icon: Megaphone,

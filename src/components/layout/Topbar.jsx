@@ -18,9 +18,10 @@ export function Topbar({ onMenu, counts = {} }) {
   const { can } = useAdmin();
 
   const alerts = [
-    { label: "Astrologer applications pending", count: counts.pendingApprovals, href: "/astrologers?status=pending", module: "astrologers" },
+    { label: "New astrologer applications", count: counts.pendingApprovals, href: "/astrologers?status=pending", module: "astrologers" },
     { label: "Payout requests", count: counts.payoutRequests, href: "/payouts", module: "payouts" },
-    { label: "Open tickets", count: counts.openTickets, href: "/support?status=open", module: "support" },
+    { label: "Tickets waiting for a reply", count: counts.openTickets, href: "/support?status=open", module: "support" },
+    { label: "New website enquiries", count: counts.newLeads, href: "/enquiries", module: "support" },
     { label: "Flagged chats", count: counts.flaggedChats, href: "/chats/flagged", module: "chats" },
     { label: "Failed payments (7d)", count: counts.failedPayments, href: "/payments?status=failed", module: "payments" },
   ].filter((a) => a.count && can(a.module));

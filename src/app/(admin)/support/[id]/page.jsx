@@ -13,6 +13,7 @@ import { ActionButton } from "@/components/common/ActionButton";
 import { TicketThread } from "../_components/TicketThread";
 import { OpenChatButton, TicketControls } from "../_components/TicketControls";
 import { requestTicketRefund } from "@/actions/support";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
@@ -32,6 +33,7 @@ export default async function TicketDetailPage({ params }) {
 
   return (
     <>
+      <MarkSeen section="support" />
       <PageHeader
         back={{ href: "/support", label: "Ticket inbox" }}
         title={ticket.subject}

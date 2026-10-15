@@ -11,7 +11,8 @@ const REASONS = new Set(["idle", "expired", "elsewhere"]);
 export async function GET(request) {
   clearSessionCookies(await cookies());
   const reason = request.nextUrl.searchParams.get("reason");
-  const url = new URL("/login", request.url);
-  if (REASONS.has(reason)) url.searchParams.set("reason", reason);
-  return NextResponse.redirect(url);
+  // Relative Location: behind Nginx the app sees itself as http://localhost:<port>, so an absolute URL built
+  // from request.url sent admins to localhost after being signed out. The browser keeps the real domain.
+  const location = REASONS.has(reason) ? `/login?reason=${reason}` : "/login";
+  return new NextResponse(null, { status: 307, headers: { Location: location } });
 }

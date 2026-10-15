@@ -13,6 +13,7 @@ import { TabLinks } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/common/FilterBar";
 import { ActionButton } from "@/components/common/ActionButton";
 import { approveRefund, rejectRefund } from "@/actions/payments";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export const metadata = { title: "Refunds" };
 
@@ -73,6 +74,7 @@ export default async function RefundsPage({ searchParams }) {
 
   return (
     <>
+      <MarkSeen section="refunds" />
       <PageHeader
         back={{ href: "/payments", label: "Payments" }}
         title="Refunds"

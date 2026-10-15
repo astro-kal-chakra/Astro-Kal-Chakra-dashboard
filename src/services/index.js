@@ -85,6 +85,9 @@ export const getTickets = ({ q, status, priority, category, assignee, page } = {
 
 export const getTicket = (id) => api(`/tickets/${seg(id)}`, { nullOn404: true });
 
+/* ---------------- Website enquiries (contact form + astrologer applications) ---------------- */
+export const getLeads = ({ type = "contact", status, q, page } = {}) => api("/leads", { query: { type, status, q, page } });
+
 export const getCannedReplies = () => api("/canned-replies");
 
 /* ---------------- Marketing & content ---------------- */

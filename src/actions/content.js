@@ -55,6 +55,11 @@ export async function saveBlog(id, d = {}, status = "draft") {
   return run(() => (id ? api(`/blogs/${seg(id)}`, { method: "PATCH", body }) : api("/blogs", { method: "POST", body })));
 }
 
+/** Deletes an article for good (needs content:delete; the backend writes it to the audit log). */
+export async function deleteBlog(id) {
+  return run(() => api(`/blogs/${seg(id)}`, { method: "DELETE" }));
+}
+
 const BLOG_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const BLOG_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 const MB = 1024 * 1024;

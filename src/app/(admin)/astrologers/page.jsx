@@ -12,6 +12,7 @@ import { PersonCell } from "@/components/ui/Avatar";
 import { TabLinks } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/common/FilterBar";
 import { AstroNow, PlatformTag } from "@/components/common/Presence";
+import { MarkSeen } from "@/components/common/MarkSeen";
 
 export const metadata = { title: "Astrologers" };
 
@@ -179,6 +180,7 @@ export default async function AstrologersPage({ searchParams }) {
 
   return (
     <>
+      <MarkSeen section="astrologers" />
       <PageHeader
         title="Astrologers"
         description={

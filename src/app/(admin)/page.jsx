@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Banknote, CreditCard, Flag, IndianRupee, LifeBuoy, Radio, Sparkles, UserPlus, Users, Hourglass, Wallet, MessagesSquare } from "lucide-react";
+import { AlertTriangle, ArrowRight, Banknote, CreditCard, Flag, IndianRupee, LifeBuoy, Radio, Sparkles, UserPlus, Users, Hourglass, Wallet, MessagesSquare, Inbox } from "lucide-react";
 import { checkAccess } from "@/lib/session";
 import { getAnalytics } from "@/services/analytics";
 import { getAttentionCounts, getLiveSnapshot } from "@/services";
@@ -38,9 +38,10 @@ export default async function OverviewPage({ searchParams }) {
   const can = (m) => admin.role.permissions[m]?.includes("view");
 
   const attention = [
-    { label: "Astrologer approvals", count: counts.pendingApprovals, href: "/astrologers?status=pending", icon: Sparkles, module: "astrologers", tone: "bg-primary-soft text-primary-ink" },
+    { label: "New astrologer applications", count: counts.pendingApprovals, href: "/astrologers?status=pending", icon: Sparkles, module: "astrologers", tone: "bg-primary-soft text-primary-ink" },
     { label: "Payout requests", count: counts.payoutRequests, href: "/payouts", icon: Banknote, module: "payouts", tone: "bg-success-soft text-success" },
-    { label: "Open tickets", count: counts.openTickets, href: "/support?status=open", icon: LifeBuoy, module: "support", tone: "bg-info-soft text-info" },
+    { label: "Tickets waiting for a reply", count: counts.openTickets, href: "/support?status=open", icon: LifeBuoy, module: "support", tone: "bg-info-soft text-info" },
+    { label: "New website enquiries", count: counts.newLeads, href: "/enquiries", icon: Inbox, module: "support", tone: "bg-warning-soft text-warning" },
     { label: "Flagged chats", count: counts.flaggedChats, href: "/chats/flagged", icon: Flag, module: "chats", tone: "bg-warning-soft text-warning" },
     { label: "Failed payments (7d)", count: counts.failedPayments, href: "/payments?status=failed", icon: AlertTriangle, module: "payments", tone: "bg-danger-soft text-danger" },
   ].filter((x) => can(x.module));

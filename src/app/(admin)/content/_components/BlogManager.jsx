@@ -2,7 +2,7 @@
 
 import { useServerState } from "@/lib/useServerState";
 import { useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -14,7 +14,8 @@ import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { formatNumber, timeAgo } from "@/lib/utils";
 import { now } from "@/lib/clock";
-import { getBlog, saveBlog } from "@/actions/content";
+import { deleteBlog, getBlog, saveBlog } from "@/actions/content";
+import { ActionButton } from "@/components/common/ActionButton";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { BlogCoverField } from "./BlogCoverField";
 
@@ -54,6 +55,7 @@ export function BlogManager({ data, params }) {
   // UI mirror of content:edit / content:approve — the backend enforces the same.
   const canEdit = can("content", "edit");
   const canPublish = can("content", "approve");
+  const canDelete = can("content", "delete");
 
   const save = async (status) => {
     const form = document.getElementById("blog-form");
@@ -89,8 +91,37 @@ export function BlogManager({ data, params }) {
     { key: "status", label: "Status", render: (b) => <StatusBadge status={b.status} /> },
     { key: "views", label: "Views", align: "right", render: (b) => (b.views ? formatNumber(b.views) : "—") },
     { key: "updatedAt", label: "Updated", hideOnMobile: true, render: (b) => timeAgo(b.updatedAt) },
-    ...(canEdit
-      ? [{ key: "edit", label: "", align: "right", render: (b) => <Button size="icon-sm" variant="ghost" aria-label={`Edit ${b.title}`} icon={<Pencil />} onClick={() => open(b)} /> }]
+    ...(canEdit || canDelete
+      ? [
+          {
+            key: "edit",
+            label: "",
+            align: "right",
+            render: (b) => (
+              <span className="flex justify-end gap-1">
+                {canEdit && <Button size="icon-sm" variant="ghost" aria-label={`Edit ${b.title}`} title="Edit" icon={<Pencil />} onClick={() => open(b)} />}
+                <ActionButton
+                  module="content"
+                  action="delete"
+                  confirm
+                  size="icon-sm"
+                  variant="ghost"
+                  icon={<Trash2 className="text-danger" />}
+                  dialogTitle="Delete this article?"
+                  dialogDescription={`"${b.title}" will be removed from the website and the dashboard for good. This can't be undone.`}
+                  confirmLabel="Delete article"
+                  dialogVariant="danger"
+                  success="Article deleted"
+                  successDescription={b.title}
+                  run={() => deleteBlog(b.id)}
+                  onDone={() => setBlogs((list) => list.filter((x) => x.id !== b.id))}
+                >
+                  <span className="sr-only">{`Delete ${b.title}`}</span>
+                </ActionButton>
+              </span>
+            ),
+          },
+        ]
       : []),
   ];
 
