@@ -13,6 +13,9 @@ import { useToast } from "@/providers/ToastProvider";
 import { useAdmin } from "@/providers/AdminProvider";
 import { saveFaq, setFaqPublished } from "@/actions/content";
 
+/** Standard FAQ categories (website groups: consultations, payments, refunds, privacy, account, general). */
+const FAQ_CATEGORIES = ["Consultations", "Payments & Wallet", "Refunds", "Privacy & Safety", "Account", "General"];
+
 export function FaqManager({ initial }) {
   const [faqs, setFaqs] = useServerState(initial);
   const [editing, setEditing] = useState(null);
@@ -23,7 +26,10 @@ export function FaqManager({ initial }) {
   const canEdit = can("content", "edit");
   const canPublish = can("content", "approve");
 
-  const categories = [...new Set([...faqs.map((f) => f.category), "General"])];
+  // Cards on this page: only categories that have questions. The form offers the standard ones
+  // (they match the website's FAQ groups and the app's help screen) plus any custom ones already used.
+  const categories = [...new Set(faqs.map((f) => f.category))];
+  const formCategories = [...new Set([...FAQ_CATEGORIES, ...categories])];
 
   const togglePublish = async (f, published) => {
     setFaqs((list) => list.map((x) => (x.id === f.id ? { ...x, published } : x)));
@@ -109,7 +115,7 @@ export function FaqManager({ initial }) {
               <Textarea id="fq-a" name="answer" required rows={5} defaultValue={editing.answer} />
             </Field>
             <Field label="Category" htmlFor="fq-cat">
-              <Select id="fq-cat" name="category" defaultValue={editing.category ?? categories[0]} options={categories} />
+              <Select id="fq-cat" name="category" defaultValue={editing.category ?? "General"} options={formCategories} />
             </Field>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button onClick={() => setEditing(null)}>Cancel</Button>
