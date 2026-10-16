@@ -5,6 +5,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TabLinks } from "@/components/ui/Tabs";
 import { DateRangeFilter } from "@/components/charts/DateRangeFilter";
 import { ExportButton } from "@/components/common/ExportButton";
+import { ActionButton } from "@/components/common/ActionButton";
+import { RefreshCcw } from "lucide-react";
+import { recalculateAnalytics } from "@/actions/analytics";
 import { derive } from "./_views/derive";
 import { UsersView } from "./_views/UsersView";
 import { AstrologersView } from "./_views/AstrologersView";
@@ -43,7 +46,23 @@ export default async function AnalyticsPage({ searchParams }) {
       <PageHeader
         title="Analytics"
         description="Computed from daily stats pre-aggregated by a background job."
-        actions={<ExportButton module="analytics" filename={`analytics-${view.value}-${a.range.preset}.csv`} rows={a.series} />}
+        actions={
+          <>
+            <ActionButton
+              module="analytics"
+              confirm
+              icon={<RefreshCcw />}
+              dialogTitle="Recalculate numbers"
+              dialogDescription="Recomputes the daily numbers for the last 90 days from sessions, payments and sign-ups. Takes a minute or two; refresh the page afterwards."
+              confirmLabel="Recalculate"
+              success="Recalculating the last 90 days"
+              run={recalculateAnalytics.bind(null, 90)}
+            >
+              <span className="max-sm:hidden">Recalculate</span>
+            </ActionButton>
+            <ExportButton module="analytics" filename={`analytics-${view.value}-${a.range.preset}.csv`} rows={a.series} />
+          </>
+        }
       />
       <div className="sticky top-16 z-20 -mx-4 mb-5 border-b border-border bg-bg/90 px-4 pt-1 backdrop-blur-md sm:-mx-6 sm:px-6">
         <DateRangeFilter range={a.range} className="py-2" />
