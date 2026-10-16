@@ -64,6 +64,25 @@ export async function unblockAstrologer(id, reason) {
   return run(() => api(`/astrologers/${seg(id)}/unblock`, { method: "POST", body: { reason } }));
 }
 
+/** Hidden astrologers disappear from the website and app (listing, profile, booking, live). */
+export async function hideAstrologer(id, reason) {
+  return run(() => api(`/astrologers/${seg(id)}/hide`, { method: "POST", body: { reason } }));
+}
+
+export async function unhideAstrologer(id, reason) {
+  return run(() => api(`/astrologers/${seg(id)}/unhide`, { method: "POST", body: { reason } }));
+}
+
+/** Clears profile, KYC, bank, approval and training; they register again on next login. */
+export async function resetAstrologer(id, reason) {
+  return run(() => api(`/astrologers/${seg(id)}/reset`, { method: "POST", body: { reason } }));
+}
+
+/** Closes the account and frees the mobile number; records stay for accounting. */
+export async function deleteAstrologer(id, reason) {
+  return run(() => api(`/astrologers/${seg(id)}/delete`, { method: "POST", body: { reason } }));
+}
+
 /**
  * Settings tab. `values` = { commission, priceLimits: { chat: { min, max }, … }, badges, forceOffline: { on, reason }, queuePaused }.
  * Only known keys are sent; the backend validates the limits again.

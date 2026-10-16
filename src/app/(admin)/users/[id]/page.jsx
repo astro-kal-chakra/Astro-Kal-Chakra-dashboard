@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Activity, Ban, CircleCheck, Gift, Smartphone, Trash2, Wallet } from "lucide-react";
+import { Activity, Ban, CircleCheck, Gift, RefreshCcw, Smartphone, Trash2, Wallet } from "lucide-react";
 import { checkAccess } from "@/lib/session";
 import { getUser } from "@/services";
 import { flatParams } from "@/lib/url";
@@ -15,7 +15,7 @@ import { TabLinks } from "@/components/ui/Tabs";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { MaskedValue } from "@/components/common/MaskedValue";
 import { ActionButton } from "@/components/common/ActionButton";
-import { adjustWallet, blockUser, deleteUser, revealUser, unblockUser } from "@/actions/users";
+import { adjustWallet, blockUser, deleteUser, resetUser, revealUser, unblockUser } from "@/actions/users";
 import { EditUserProfile } from "./_components/EditUserProfile";
 import { AutoRefresh } from "@/components/common/AutoRefresh";
 import { NowBadge, PlatformTag } from "@/components/common/Presence";
@@ -158,6 +158,21 @@ export default async function UserDetailPage({ params, searchParams }) {
                 Block
               </ActionButton>
             )}
+            <ActionButton
+              module="users"
+              action="delete"
+              reason
+              variant="ghost"
+              icon={<RefreshCcw />}
+              dialogTitle="Reset user"
+              dialogDescription="Name, birth details and saved profiles are cleared and they are signed out. On next login they set up their profile again. Wallet balance, payments and consultation history are kept."
+              confirmLabel="Reset"
+              dialogVariant="danger"
+              success="User reset"
+              run={resetUser.bind(null, user.id)}
+            >
+              <span className="max-sm:hidden">Reset</span>
+            </ActionButton>
             <ActionButton
               module="users"
               action="delete"

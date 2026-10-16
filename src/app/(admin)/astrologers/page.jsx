@@ -23,6 +23,8 @@ const STATUSES = [
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
   { value: "blocked", label: "Blocked" },
+  { value: "hidden", label: "Hidden" },
+  { value: "deleted", label: "Deleted" },
 ];
 
 function Skills({ skills }) {
@@ -80,7 +82,16 @@ const rating = (a) => (
   </span>
 );
 
-const nameCol = { key: "name", label: "Astrologer", render: (a) => <PersonCell name={a.name || "Name not set"} sub={[a.id, a.city].filter(Boolean).join(" · ")} /> };
+const nameCol = {
+  key: "name",
+  label: "Astrologer",
+  render: (a) => (
+    <span className="flex items-center gap-2">
+      <PersonCell name={a.name || "Name not set"} sub={[a.id, a.city].filter(Boolean).join(" · ")} />
+      {a.hidden && a.status !== "deleted" && <Badge tone="warning">Hidden</Badge>}
+    </span>
+  ),
+};
 
 const COLUMNS = {
   all: [
@@ -166,6 +177,9 @@ const COLUMNS = {
     { key: "appliedAt", label: "Joined", sortable: true, render: (a) => formatDate(a.appliedAt) },
   ],
 };
+// Hidden astrologers can be in any status, so they get the "All" columns; deleted ones the "Blocked" columns
+COLUMNS.hidden = COLUMNS.all;
+COLUMNS.deleted = COLUMNS.blocked;
 
 export default async function AstrologersPage({ searchParams }) {
   const { denied } = await checkAccess("astrologers");

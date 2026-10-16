@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Activity, Ban, CircleCheck, CircleX, FilePlus2, Landmark, Percent, RotateCcw, Star } from "lucide-react";
+import { Activity, Ban, CircleCheck, CircleX, Eye, EyeOff, FilePlus2, Landmark, Percent, RefreshCcw, RotateCcw, Star, Trash2 } from "lucide-react";
 import { checkAccess } from "@/lib/session";
 import { getAstrologer } from "@/services";
 import { flatParams } from "@/lib/url";
@@ -26,7 +26,11 @@ import { AstroNow, PlatformTag } from "@/components/common/Presence";
 import { getAstrologerFilterOptions } from "@/services/astrologers";
 import {
   blockAstrologer,
+  deleteAstrologer,
+  hideAstrologer,
   rejectAstrologer,
+  resetAstrologer,
+  unhideAstrologer,
   reopenAstrologer,
   requestDocuments,
   revealAstrologer,
@@ -103,7 +107,67 @@ const REJECT_REASONS = ["Blurry KYC document", "Certification not verifiable", "
 const DOC_REQUEST_REASONS = ["Document is blurry", "Document expired", "Name does not match", "Missing document"];
 const BLOCK_REASONS = ["Asked users to pay outside the app", "Abusive behaviour", "Repeated complaints", "Fraud / abuse investigation", "Fake documents"];
 
+const HIDE_REASONS = ["Under investigation", "Profile needs changes", "Asked to take a break", "Quality review"];
+
+/** Hide / reset / delete — available in every status except deleted. */
+function AccountActions({ a }) {
+  if (a.status === "deleted") return null;
+  return (
+    <>
+      {a.hidden ? (
+        <ActionButton module="astrologers" reason icon={<Eye />} dialogTitle="Show to users again" dialogDescription="The astrologer appears on the website and app again." success="Astrologer visible again" run={unhideAstrologer.bind(null, a.id)}>
+          Unhide
+        </ActionButton>
+      ) : (
+        <ActionButton
+          module="astrologers"
+          reason
+          reasons={HIDE_REASONS}
+          icon={<EyeOff />}
+          dialogTitle="Hide from users"
+          dialogDescription="They disappear from the website and app at once and go offline. They can still log in; unhide any time."
+          success="Astrologer hidden from users"
+          run={hideAstrologer.bind(null, a.id)}
+        >
+          Hide
+        </ActionButton>
+      )}
+      <ActionButton
+        module="astrologers"
+        action="delete"
+        reason
+        variant="ghost"
+        icon={<RefreshCcw />}
+        dialogTitle="Reset astrologer"
+        dialogDescription="Profile, KYC, bank details, approval and training are cleared and they are signed out. On next login they register again from step 1. Sessions, reviews and earnings stay."
+        confirmLabel="Reset"
+        dialogVariant="danger"
+        success="Astrologer reset"
+        run={resetAstrologer.bind(null, a.id)}
+      >
+        <span className="max-sm:hidden">Reset</span>
+      </ActionButton>
+      <ActionButton
+        module="astrologers"
+        action="delete"
+        reason
+        variant="ghost"
+        icon={<Trash2 />}
+        dialogTitle="Delete astrologer"
+        dialogDescription="The account is closed: hidden, signed out and personal details removed. The mobile number is freed. Session, review and payout records are kept for accounting. This can't be undone."
+        confirmLabel="Delete"
+        dialogVariant="danger"
+        success="Astrologer deleted"
+        run={deleteAstrologer.bind(null, a.id)}
+      >
+        <span className="max-sm:hidden">Delete</span>
+      </ActionButton>
+    </>
+  );
+}
+
 function VerificationActions({ a }) {
+  if (a.status === "deleted") return null;
   // The UI hides these by permission; the backend enforces the same check.
   const approve = <ApproveButton id={a.id} name={a.name} />;
   const reject = (
@@ -252,12 +316,14 @@ export default async function AstrologerDetailPage({ params, searchParams }) {
               </Badge>
             ))}
             {a.rejectionReason && <Badge tone="danger">Rejected: {a.rejectionReason}</Badge>}
+            {a.hidden && a.status !== "deleted" && <Badge tone="warning">Hidden from users{a.hiddenReason ? `: ${a.hiddenReason}` : ""}</Badge>}
           </>
         }
         actions={
           <>
-            <EditAstrologerProfile id={a.id} skillOptions={options.skills} />
+            {a.status !== "deleted" && <EditAstrologerProfile id={a.id} skillOptions={options.skills} />}
             <VerificationActions a={a} />
+            <AccountActions a={a} />
           </>
         }
       />

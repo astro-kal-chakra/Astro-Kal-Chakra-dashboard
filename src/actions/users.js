@@ -17,6 +17,11 @@ export async function unblockUser(id, reason) {
   return run(() => api(`/users/${seg(id)}/unblock`, { method: "POST", body: { reason } }));
 }
 
+/** Clears profile and birth details; the user sets up their profile again on next login. Wallet is kept. */
+export async function resetUser(id, reason) {
+  return run(() => api(`/users/${seg(id)}/reset`, { method: "POST", body: { reason } }));
+}
+
 export async function deleteUser(id, reason) {
   return run(() => api(`/users/${seg(id)}/delete`, { method: "POST", body: { reason } }));
 }
