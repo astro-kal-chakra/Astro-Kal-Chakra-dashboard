@@ -100,8 +100,8 @@ export function FreeChatAstrologers({ data, modes: defaultModes, minutes, unsave
           <div>
             <p className="text-sm font-semibold text-text">Make selected astrologers available for free {freeLabel}</p>
             <p className="text-xs text-muted">
-              Switches &ldquo;Free chat&rdquo; on for them now: they take only free {freeLabel} sessions from new users
-              {paused.length ? `; ${paused.join(" and ")} and all paid sessions are paused` : "; all paid sessions are paused"} until they or you turn it off.
+              Switches &ldquo;Free chat&rdquo; on for them now: users who haven&apos;t had their free session get a free {freeLabel} session
+              (₹0 for the user, no earning for the astrologer). Everyone else books their normal paid sessions. On until they or you turn it off.
             </p>
           </div>
           <Switch checked={enable} onChange={setEnable} label={`Make selected astrologers available for free ${freeLabel}`} disabled={!editable || unsaved || !modes.length} />
