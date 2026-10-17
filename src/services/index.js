@@ -28,6 +28,11 @@ export const getAstrologer = (id) => api(`/astrologers/${seg(id)}`, { nullOn404:
 /** Live sessions: { rows (filtered by mode), summary: { total, chat, voice, video, amount } over all of them }. */
 export const getLiveSessions = ({ mode, page } = {}) => api("/sessions/live", { query: { mode, page } });
 
+/** Astrologers' live streams: `status` live (default) | ended. Rows + `summary` { liveNow, watchingNow, endedToday, giftsToday }. */
+export const getLiveStreams = ({ status, q, page } = {}) => api("/live-rooms", { query: { status, q, page } });
+/** One live stream: numbers + who is watching now + latest gifts / questions. */
+export const getLiveStream = (id) => api(`/live-rooms/${seg(id)}`, { nullOn404: true });
+
 export const getSessions = ({ q, mode, status, from, to, sort = "startedAt:desc", page } = {}) =>
   api("/sessions", { query: { q, mode, status, from, to, sort, page } });
 

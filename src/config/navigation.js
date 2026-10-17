@@ -40,6 +40,7 @@ export const NAV_SECTIONS = [
         module: "sessions",
         children: [
           { label: "Live monitor", href: "/sessions/live" },
+          { label: "Live streams", href: "/sessions/live-streams" },
           { label: "Session history", href: "/sessions" },
         ],
       },

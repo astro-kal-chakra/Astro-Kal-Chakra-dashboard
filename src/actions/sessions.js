@@ -4,6 +4,11 @@ import { api, seg } from "@/lib/api";
 import { num, run, str } from "@/lib/action";
 
 /** Billing stops now; both sides are told the session was ended by support. */
+/** Ends an astrologer's live stream now (everyone watching is told it ended). */
+export async function endLiveStream(id, reason) {
+  return run(() => api(`/live-rooms/${seg(id)}/end`, { method: "POST", body: { reason } }));
+}
+
 export async function forceEndSession(id, reason) {
   return run(() => api(`/sessions/${seg(id)}/force-end`, { method: "POST", body: { reason } }));
 }
